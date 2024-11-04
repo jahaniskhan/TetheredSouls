@@ -1,0 +1,257 @@
+# Teenage Engineering-Inspired Game Design Bible
+
+## Core Design Philosophy
+- **Reduction to Essence**: Strip away everything that isn't absolutely necessary
+- **Playful Functionality**: Every element should be both useful and delightful
+- **Industrial Warmth**: Combine mechanical precision with organic warmth
+- **Tactical Feedback**: Design should feel physically responsive, even in digital space
+- **Retro-Future Aesthetic**: Modern functionality meets vintage industrial design
+
+## Color Palette
+
+### Primary Colors
+- Off-White: `#F5F5F1` (Main background/base color)
+- Industrial Grey: `#2B2B2B` (Primary UI elements)
+- Signal Orange: `#FF6B2B` (Accent/interactive elements)
+
+### Secondary Colors
+- Warm Beige: `#E5E1D8` (Secondary background)
+- Charcoal: `#1A1A1A` (Deep shadows/contrast)
+- Machine Yellow: `#FFB03B` (Secondary accent)
+- Digital Green: `#4AFF8F` (System indicators)
+
+## Typography
+- Primary Font: Helvetica Neue or SF Pro Display
+- Display Numbers: Custom monospace inspired by LED segments
+- All text should be either Regular (400) or Bold (700)
+- No italics, maintain geometric clarity
+
+## UI Elements
+
+### Blocks
+- Hard-edged geometric shapes
+- 2px minimum border radius
+- Consistent 8px grid system
+- Subtle shadow drops (2px offset maximum)
+
+### Interactive Elements
+- Clear state changes with color shifts
+- Mechanical click animations (3-4 frames maximum)
+- Audio feedback mimicking physical switches
+- High contrast for active states
+
+### Grid System
+- Base unit: 8px
+- Larger spacing increments: 16px, 24px, 32px
+- Screen divisions should follow TE's preferred 3:2 ratio
+
+## Animation Guidelines
+- Quick, precise movements (150-200ms)
+- No easing on basic interactions
+- Step-based animations (like LED displays)
+- Mechanical rather than organic motion
+
+## Sound Design Principles
+- Short, click-like feedback (50-100ms)
+- High-frequency confirmation tones
+- Low-frequency error indicators
+- Synthesizer-inspired system sounds
+
+## Interface Layout
+- Maximum 3 levels of hierarchy
+- Left-aligned text and elements
+- Consistent spacing between sections
+- Empty space as a design element
+
+## Game-Specific Elements
+
+### Block Design
+- Minimal textures
+- Hard edges with single-pixel highlights
+- Limited color palette (3 colors per block maximum)
+- Geometric patterns only
+
+### HUD Elements
+- Transparent backgrounds (`#2B2B2B` at 85% opacity)
+- Single-pixel borders
+- LED-style numerical displays
+- Minimal animations
+
+### Menu Systems
+- Grid-based layout
+- Toggle switches instead of buttons where possible
+- Mechanical sliding transitions
+- Clear visual hierarchy
+
+## Anti-Patterns to Avoid
+- Gradients or complex color blends
+- Decorative elements without function
+- Skeuomorphic textures
+- Complex animations
+- Rounded or organic shapes
+- More than 3 interactive elements per group
+
+## Implementation Rules
+1. Always maintain 1:1 pixel accuracy
+2. Use vector graphics where possible
+3. Implement consistent click/hover states
+4. Maintain minimum touch target size of 44x44px
+5. Ensure all interactive elements have mechanical feedback
+
+
+Based on the search results and Teenage Engineering's minimalist industrial design philosophy, I'll create a detailed README for a modern take on Oakever's Wood Block Puzzle game.
+
+# BlockPuzzle™
+*A minimalist block puzzle experience*
+
+![Teenage Engineering inspired mockup]
+
+## Overview
+BlockPuzzle™ is a modern interpretation of the classic wood block puzzle game, featuring a clean monochromatic interface inspired by Teenage Engineering's industrial design philosophy. The game combines the addictive nature of block-fitting puzzles with social features and music integration.
+
+## Core Gameplay Features
+
+### Grid System
+- 10x10 gameplay grid
+- Minimalist monochrome blocks with subtle shadows
+- High-contrast piece preview area
+- Block holder section for strategic piece reservation
+- Clean, vector-based grid lines with precise pixel alignment
+
+### Block Mechanics
+- Classic block shapes (T, L, J, Square configurations)
+- Pieces cannot be rotated (following original gameplay)
+- Drag-and-drop interaction with haptic feedback
+- Line clearing animations with subtle particle effects
+- Strategic piece holding system
+
+### Scoring System
+- Points awarded for each block placement
+- Multiplier system for line clears
+- Combo system (4+ line clears trigger special effects)
+- Global leaderboard integration via Firebase
+- Weekly challenges and achievements
+
+## Technical Features
+
+### Block Generation
+```typescript
+interface BlockShape {
+  matrix: boolean[][];
+  weight: number; // Probability weight
+  color: string;
+}
+
+class BlockGenerator {
+  private shapes: BlockShape[];
+  private weightSum: number;
+  
+  generateNextBlock(): BlockShape {
+    // Weighted random selection algorithm
+    // Ensures balanced but unpredictable gameplay
+  }
+}
+```
+
+### Social Integration
+- Real-time multiplayer matches via Firebase
+- Friend challenges
+- Score sharing
+- Custom room creation
+- In-game chat system
+
+### Spotify Integration
+- Background music synchronization
+- Beat-matched visual effects
+- Custom playlist support
+- Music-reactive grid animations
+
+## Visual Design Philosophy
+Following Teenage Engineering's principles:
+- Monochromatic color scheme
+- High contrast UI elements
+- Industrial sans-serif typography
+- Minimal animations
+- Grid-based layout system
+- Subtle sound design
+- Brutalist interface elements
+
+## Game Modes
+
+### Classic Mode
+- Endless gameplay
+- No time limit
+- Focus on high score achievement
+- Progressive difficulty scaling
+
+### Daily Challenge
+- Unique daily puzzle configuration
+- Global leaderboard
+- Shared seed generation
+- Special rewards
+
+### Versus Mode
+- Real-time 1v1 matches
+- Split-screen interface
+- Attack mechanics
+- Power-up system
+
+## Technical Stack
+- React Native / Flutter for cross-platform deployment
+- Firebase for backend services
+- Spotify SDK for music integration
+- Custom WebGL renderer for animations
+- Local SQLite for offline functionality
+
+## Performance Optimizations
+- Block matrix calculations using bit operations
+- Efficient collision detection algorithms
+- Asset preloading system
+- Memory pool for particle effects
+- Frame-rate independent physics
+
+## Sound Design
+- Minimal interaction sounds
+- Wood impact samples
+- Line clear effects
+- Ambient background textures
+- Music reactivity
+
+## Accessibility Features
+- High contrast mode
+- Customizable color schemes
+- Screen reader support
+- Variable text sizing
+- Colorblind options
+
+## Development Roadmap
+
+### Phase 1: Core Mechanics
+- Basic grid system
+- Block generation
+- Movement mechanics
+- Scoring system
+
+### Phase 2: Social Features
+- Firebase integration
+- User accounts
+- Leaderboards
+- Friend system
+
+### Phase 3: Music Integration
+- Spotify SDK implementation
+- Visual effects system
+- Custom playlist support
+
+### Phase 4: Polish
+- UI refinement
+- Performance optimization
+- Sound design
+- Tutorial system
+
+## References
+- [QBlock: Wood Block Puzzle Game](https://play.google.com/store/apps/details?id=puzzle.blockpuzzle.cube.relax)
+- [Block Puzzle](https://play.google.com/store/apps/details?id=com.bigcake.android.bpdaily)
+- Teenage Engineering design principles
+
+This implementation combines the addictive gameplay of Oakever's original with Teenage Engineering's minimalist industrial design philosophy, creating a unique and modern puzzle experience.
