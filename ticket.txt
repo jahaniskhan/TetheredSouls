@@ -1,0 +1,121 @@
+# TetheredSouls Bug Tracking Document
+Version: 0.1.2
+Last Updated: 2024-03-20
+
+====================
+1. RESOLVED ISSUES
+====================
+
+[TSUI-001] Grid Layout System ✓
+Status: Resolved
+Resolution: Grid properly sized and positioned
+Fixed in: GridView.swift (lines 10-16, 119-127)
+
+[TSUI-002] Heart Animation System ✓
+Status: Resolved
+Resolution: Hearts appear on empty cell taps
+
+====================
+2. ACTIVE CRITICAL ISSUES
+====================
+
+[TSGP-001] Block Preview and Shadow System
+Priority: Critical
+Status: Active
+Component: DraggableBlock.swift
+Description: Preview system not functioning correctly
+Symptoms:
+- Shadow preview only appears in top-left corner
+- Preview doesn't match actual block shape
+- Ghost preview position incorrect
+Related Code: DraggableBlock.swift (lines 4-13)
+
+[TSGP-002] Block Selection and Gesture System
+Priority: Critical
+Status: Active
+Component: BlockSelectionView.swift
+Description: Selection and gesture system broken
+Symptoms:
+- Horizontal scroll breaks after block selection
+- Cannot dismiss selected block
+- System becomes unresponsive after block dismissal
+Related Code: BlockSelectionView.swift (lines 20-31)
+
+[TSGP-003] Block Placement Logic
+Priority: Critical
+Status: Active
+Component: GridView.swift
+Description: Block placement not working correctly
+Symptoms:
+- Only 1x1 blocks can be placed
+- Placement restricted to top corner
+- Multi-cell blocks non-functional
+Related Code: GridView.swift (lines 18-33)
+
+====================
+3. IMPLEMENTATION PLAN
+====================
+
+Phase 1: Block Selection (TSGP-002)
+- Add .onEnded to DragGesture
+- Implement proper state reset
+- Fix horizontal scroll persistence
+Related Files:
+- BlockSelectionView.swift
+- ContentView.swift
+
+Phase 2: Preview System (TSGP-001)
+- Fix shadow preview positioning
+- Implement accurate block shape preview
+- Add proper preview dismissal
+Related Files:
+- DraggableBlock.swift
+- BlockPreview.swift
+
+Phase 3: Block Placement (TSGP-003)
+- Fix multi-cell block placement logic
+- Implement proper grid position calculation
+- Add placement validation
+Related Files:
+- GridView.swift
+- Block.swift
+
+====================
+4. TESTING CRITERIA
+====================
+
+1. Block Selection:
+- Horizontal scroll works before and after selection
+- Block can be selected and dismissed
+- System returns to initial state after dismissal
+
+2. Preview System:
+- Shadow preview matches block shape
+- Preview appears at correct position
+- Ghost preview updates accurately during drag
+
+3. Block Placement:
+- All block shapes can be placed
+- Placement works across entire grid
+- Invalid placements are prevented
+
+====================
+5. DEPENDENCIES
+====================
+
+Block Selection → Preview System → Block Placement
+
+====================
+6. NOTES
+====================
+
+Current State:
+- Grid layout fixed and stable
+- Heart animations working
+- Core gameplay systems need repair
+- State management requires overhaul
+
+Environment:
+- iOS Target Platform
+- SwiftUI Framework
+- Xcode Latest Version

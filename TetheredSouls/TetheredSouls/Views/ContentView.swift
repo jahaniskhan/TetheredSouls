@@ -1,47 +1,62 @@
 import SwiftUI
 
-
 struct ContentView: View {
     private let columns: Int = 10
     private let rows: Int = 10
     
     @State private var grid: [[Bool]] = Array(repeating: Array(repeating: false, count: 10), count: 10)
     @State private var score: Int = 0
+    @State private var currentStreak: Int = 0
     @State private var isLoading = true
+    @State private var selectedBlock: Block?
+    @State private var isDragging = false
+    @State private var blockPosition: CGPoint?
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(white: 0.1),
-                    Color(white: 0.05)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            ).ignoresSafeArea()
+            Color(red: 0.05, green: 0.05, blue: 0.05)
+                .ignoresSafeArea()
             
             VStack(spacing: Theme.Layout.spacing) {
-                VStack(spacing: 8) {
-                    Text("TETHERED")
-                        .font(Theme.Typography.title)
-                        .foregroundColor(Theme.text)
+                // Top bar with game panel
+                HStack(spacing: Theme.Layout.spacing) {
+                    GamePanel(score: score, currentStreak: currentStreak)
+                        .frame(width: UIScreen.main.bounds.width * 0.7)
                     
-                    Text("SCORE: \(score)")
-                        .font(Theme.Typography.score)
-                        .foregroundColor(Theme.primary)
-                        .padding(.horizontal, Theme.Layout.padding)
-                        .padding(.vertical, 8)
-                        .background(Theme.surface)
-                        .cornerRadius(Theme.Layout.cornerRadius)
+                    Spacer()
+                    
+                    // FX indicators
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Theme.tertiary)
+                            .frame(width: 6, height: 6)
+                        Text("FX")
+                            .font(Theme.Typography.caption)
+                            .foregroundColor(Theme.textSecondary)
+                    }
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, Theme.Layout.padding)
                 
-                GridView(grid: $grid)
+                Spacer()
+                
+                GridView(grid: $grid, selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
                     .padding(.horizontal, Theme.Layout.padding)
                 
-                BlockSelectionView()
+                Spacer()
+                
+                BlockSelectionView(selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
+                    .frame(height: 120)
                     .padding(.horizontal, Theme.Layout.padding)
                     .padding(.bottom, 20)
+            }
+            
+            if let block = selectedBlock, isDragging {
+                DraggableBlock(
+                    block: block,
+                    position: $blockPosition,
+                    isDragging: $isDragging,
+                    grid: $grid
+                )
             }
             
             if isLoading {
@@ -55,5 +70,10 @@ struct ContentView: View {
                     }
             }
         }
+        .coordinateSpace(name: "gameArea")
     }
+}
+
+#Preview {
+    ContentView()
 }
