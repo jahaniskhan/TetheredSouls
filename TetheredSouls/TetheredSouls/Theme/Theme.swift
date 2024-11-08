@@ -7,6 +7,7 @@ enum Theme {
     static let secondary = Color(red: 0.996, green: 0.396, blue: 0.208)  // Orange
     static let tertiary = Color(red: 0.2, green: 0.6, blue: 1.0)   // Blue
     static let quaternary = Color(red: 0.996, green: 0.251, blue: 0.176)  // Red
+    static let error = Color(red: 0.92, green: 0.25, blue: 0.2)     // Signal Red
     
     static let background = Color(red: 0.07, green: 0.07, blue: 0.07)  // Darker than black
     static let surface = Color(red: 0.12, green: 0.12, blue: 0.12)     // Dark panel

@@ -7,42 +7,52 @@ struct CellView: View {
     let column: Int
     let selectedBlock: Block?
     let isPreview: Bool
-    @State private var showHeart = false
-
-    private let colors: [Color] = [
-        Theme.primary,
-        Theme.secondary,
-        Theme.tertiary,
-        Theme.quaternary
-    ]
+    let placedBlockColor: BlockColor?
+    var onPlace: ((Int, Int) -> Void)?
     
     var body: some View {
         ZStack {
-            Rectangle()
-                .fill(backgroundColor)
-                .overlay(
-                    Rectangle()
-                        .stroke(Theme.stroke, lineWidth: 1)
-                )
-                .onTapGesture {
-                    if !isOccupied && selectedBlock == nil {
-                        showHeart = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                            showHeart = false
-                        }
-                    }
-                }
+            // Base cell
+            DrawingTheme.Shapes.handDrawnRect(
+                CGRect(x: 0, y: 0, width: 100, height: 100)
+            )
+            .fill(backgroundColor)
             
-            if showHeart {
-                HeartParticle(color: colors.randomElement() ?? Theme.primary)
+            // Cell border
+            DrawingTheme.Shapes.handDrawnRect(
+                CGRect(x: 0, y: 0, width: 100, height: 100)
+            )
+            .stroke(DrawingTheme.Colors.charcoal, lineWidth: DrawingTheme.LineStyle.thin)
+            
+            // Preview overlay
+            if isPreview {
+                DrawingTheme.Shapes.handDrawnRect(
+                    CGRect(x: 2, y: 2, width: 96, height: 96)
+                )
+                .stroke(
+                    selectedBlock?.color.color ?? DrawingTheme.Colors.charcoal,
+                    lineWidth: DrawingTheme.LineStyle.medium
+                )
             }
         }
+        .onTapGesture {
+            onPlace?(row, column)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { _ in
+                    onPlace?(row, column)
+                }
+        )
     }
     
     private var backgroundColor: Color {
         if isPreview {
-            return (selectedBlock?.color.color ?? Theme.primary).opacity(0.3)
+            return selectedBlock?.color.color.opacity(0.15) ?? DrawingTheme.Colors.cream
         }
-        return isOccupied ? Theme.primary : Theme.surface
+        if isOccupied {
+            return placedBlockColor?.color ?? DrawingTheme.Colors.sage
+        }
+        return DrawingTheme.Colors.cream.opacity(0.05)
     }
 }

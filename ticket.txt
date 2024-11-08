@@ -1,6 +1,6 @@
 # TetheredSouls Bug Tracking Document
-Version: 0.1.2
-Last Updated: 2024-03-20
+Version: 0.1.4
+Last Updated: 2024-03-21
 
 ====================
 1. RESOLVED ISSUES
@@ -9,26 +9,38 @@ Last Updated: 2024-03-20
 [TSUI-001] Grid Layout System ✓
 Status: Resolved
 Resolution: Grid properly sized and positioned
-Fixed in: GridView.swift (lines 10-16, 119-127)
 
 [TSUI-002] Heart Animation System ✓
 Status: Resolved
-Resolution: Hearts appear on empty cell taps
+Resolution: Hearts appear after block placement
+
+[TSGP-004] Block Dismissal System ✓
+Status: Resolved
+Resolution: Block can be dismissed with swipe gesture
 
 ====================
 2. ACTIVE CRITICAL ISSUES
 ====================
 
-[TSGP-001] Block Preview and Shadow System
+[TSGP-005] Block Dragging System
 Priority: Critical
 Status: Active
 Component: DraggableBlock.swift
-Description: Preview system not functioning correctly
+Description: Block dragging and preview system broken
 Symptoms:
-- Shadow preview only appears in top-left corner
-- Preview doesn't match actual block shape
-- Ghost preview position incorrect
-Related Code: DraggableBlock.swift (lines 4-13)
+- Two shadow previews appearing simultaneously:
+  * One preview tethered to grid (correct position, wrong shape)
+  * Second preview stuck in top-left corner
+  * Neither preview accurately shows placement location
+- Dragging initiation broken:
+  * Cannot start drag from available blocks toolbar
+  * Always initiates from top-left corner
+- Block placement restricted:
+  * Only works in rows 7-10
+  * Placement position unclear due to inaccurate previews
+- Block shape display issues:
+  * 3x1 blocks showing as 1x1
+  * Preview appears ~3 cells down and 2 cells right from actual position
 
 [TSGP-002] Block Selection and Gesture System
 Priority: Critical
@@ -36,20 +48,21 @@ Status: Active
 Component: BlockSelectionView.swift
 Description: Selection and gesture system broken
 Symptoms:
-- Horizontal scroll breaks after block selection
-- Cannot dismiss selected block
-- System becomes unresponsive after block dismissal
+- Cannot initiate drag from block selection toolbar
+- Drag always starts from top-left corner
+- System becomes unresponsive after attempted placement
 Related Code: BlockSelectionView.swift (lines 20-31)
 
 [TSGP-003] Block Placement Logic
 Priority: Critical
 Status: Active
 Component: GridView.swift
-Description: Block placement not working correctly
+Description: Block placement severely restricted
 Symptoms:
-- Only 1x1 blocks can be placed
-- Placement restricted to top corner
-- Multi-cell blocks non-functional
+- Placement only works in rows 7-10
+- Preview does not indicate valid placement location
+- Placement success rate very low due to unclear positioning
+- Block shapes not rendering correctly in preview
 Related Code: GridView.swift (lines 18-33)
 
 ====================
@@ -57,25 +70,29 @@ Related Code: GridView.swift (lines 18-33)
 ====================
 
 Phase 1: Block Selection (TSGP-002)
-- Add .onEnded to DragGesture
-- Implement proper state reset
-- Fix horizontal scroll persistence
+- Fix drag initiation to start from toolbar
+- Remove top-left corner spawn point
+- Implement proper state management for drag start
 Related Files:
 - BlockSelectionView.swift
 - ContentView.swift
 
-Phase 2: Preview System (TSGP-001)
-- Fix shadow preview positioning
-- Implement accurate block shape preview
-- Add proper preview dismissal
+Phase 2: Preview System (TSGP-005)
+- Consolidate to single accurate preview
+- Remove stuck preview from top-left
+- Ensure preview shows exact placement location
+- Fix preview shape to match selected block
+- Correct offset issues (3 down, 2 right displacement)
+- Fix shape rendering for all block types
 Related Files:
 - DraggableBlock.swift
-- BlockPreview.swift
+- BlockPattern.swift
 
 Phase 3: Block Placement (TSGP-003)
-- Fix multi-cell block placement logic
-- Implement proper grid position calculation
-- Add placement validation
+- Enable placement across entire grid
+- Fix placement position calculation
+- Add clear visual feedback for valid placement
+- Ensure block shapes render correctly during placement
 Related Files:
 - GridView.swift
 - Block.swift
@@ -85,19 +102,25 @@ Related Files:
 ====================
 
 1. Block Selection:
-- Horizontal scroll works before and after selection
-- Block can be selected and dismissed
-- System returns to initial state after dismissal
+- Drag starts directly from toolbar
+- No top-left corner spawn
+- Preview appears immediately on drag start
+- System remains responsive throughout
 
 2. Preview System:
-- Shadow preview matches block shape
-- Preview appears at correct position
-- Ghost preview updates accurately during drag
+- Single, accurate preview
+- Shows exact placement location
+- Matches selected block's shape
+- Clear valid/invalid placement indication
+- Correct shape rendering for all block types
+- No position offset issues
 
 3. Block Placement:
-- All block shapes can be placed
-- Placement works across entire grid
-- Invalid placements are prevented
+- Works across entire grid (all rows)
+- Preview matches final placement location
+- Clear visual feedback during placement
+- High success rate due to accurate preview
+- Correct block shape rendering
 
 ====================
 5. DEPENDENCIES
@@ -110,12 +133,29 @@ Block Selection → Preview System → Block Placement
 ====================
 
 Current State:
-- Grid layout fixed and stable
-- Heart animations working
-- Core gameplay systems need repair
-- State management requires overhaul
+- Hearts working after placement
+- Grid layout stable
+- Major issues with drag initiation
+- Preview system showing duplicate shadows
+- Placement restricted to bottom rows
+- Block shapes not rendering correctly (3x1 showing as 1x1)
+- Preview offset by ~3 cells down, 2 cells right
 
 Environment:
 - iOS Target Platform
 - SwiftUI Framework
 - Xcode Latest Version
+
+Root Issues:
+1. Drag initiation in BlockSelectionView
+2. Double preview in DraggableBlock
+3. Restricted placement area in GridView
+4. Incorrect block shape rendering
+5. Preview position offset issues
+
+Implementation Priority:
+1. Fix drag initiation from toolbar
+2. Remove duplicate previews
+3. Enable placement across entire grid
+4. Fix block shape rendering
+5. Correct preview position offset

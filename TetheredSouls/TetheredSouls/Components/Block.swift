@@ -39,9 +39,6 @@ struct Block: Identifiable {
         return rotated
     }
     
-    // No, this is not syntactically correct. There are two issues:
-    // 1. Missing comma after the 1x4 Line block
-    // 2. Duplicate 3x3 Cross block definition
     static let blocks: [Block] = [
         // 1x1 Single
         Block(shape: [[true]], color: .neonCyan),
@@ -107,23 +104,23 @@ struct Block: Identifiable {
 }
 
 enum BlockColor {
-    case neonCyan      // Digital display cyan
-    case plasmaOrange  // Warning display orange
-    case digitalYellow // Status indicator yellow
-    case matrixGreen   // Terminal green
-    case synthBlue     // Electric blue
-    case techPurple    // Digital purple
+    case neonCyan      // OP-1 display cyan
+    case plasmaOrange  // OP-Z warning orange  
+    case digitalYellow // PO status yellow
+    case matrixGreen   // OP-1 terminal green
+    case synthBlue     // TX-6 electric blue
+    case techPurple    // Field purple
     case signalRed     // Alert red
     
     var color: Color {
         switch self {
-        case .neonCyan:      return Color(red: 0.2, green: 0.9, blue: 0.8)
-        case .plasmaOrange:  return Color(red: 0.996, green: 0.396, blue: 0.208)
-        case .digitalYellow: return Color(red: 0.996, green: 0.847, blue: 0.208)
-        case .matrixGreen:   return Color(red: 0.2, green: 0.8, blue: 0.4)
-        case .synthBlue:     return Color(red: 0.4, green: 0.7, blue: 0.9) // Softer blue
-        case .techPurple:    return Color(red: 0.6, green: 0.2, blue: 0.8)
-        case .signalRed:     return Color(red: 0.996, green: 0.251, blue: 0.176)
+        case .neonCyan:      return Color(red: 0.15, green: 0.85, blue: 0.78) // Deeper cyan
+        case .plasmaOrange:  return Color(red: 0.98, green: 0.42, blue: 0.08) // Richer orange
+        case .digitalYellow: return Color(red: 0.98, green: 0.88, blue: 0.12) // Warmer yellow
+        case .matrixGreen:   return Color(red: 0.18, green: 0.92, blue: 0.45) // Deeper green
+        case .synthBlue:     return Color(red: 0.28, green: 0.72, blue: 0.95) // Richer blue
+        case .techPurple:    return Color(red: 0.65, green: 0.18, blue: 0.92) // Deeper purple
+        case .signalRed:     return Color(red: 0.95, green: 0.18, blue: 0.18) // Richer red
         }
     }
 }

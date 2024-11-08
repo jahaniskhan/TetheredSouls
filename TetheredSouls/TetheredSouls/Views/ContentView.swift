@@ -1,16 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    private let columns: Int = 10
-    private let rows: Int = 10
-    
-    @State private var grid: [[Bool]] = Array(repeating: Array(repeating: false, count: 10), count: 10)
-    @State private var score: Int = 0
-    @State private var currentStreak: Int = 0
-    @State private var isLoading = true
-    @State private var selectedBlock: Block?
-    @State private var isDragging = false
-    @State private var blockPosition: CGPoint?
+    @StateObject private var gridState = GridState(size: 10)
     
     var body: some View {
         ZStack {
@@ -18,9 +9,8 @@ struct ContentView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: Theme.Layout.spacing) {
-                // Top bar with game panel
                 HStack(spacing: Theme.Layout.spacing) {
-                    GamePanel(score: score, currentStreak: currentStreak)
+                    GamePanel(score: gridState.score, currentStreak: gridState.currentStreak)
                         .frame(width: UIScreen.main.bounds.width * 0.7)
                     
                     Spacer()
@@ -39,36 +29,31 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                GridView(grid: $grid, selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
+                GridView(state: gridState)
                     .padding(.horizontal, Theme.Layout.padding)
                 
                 Spacer()
                 
-                BlockSelectionView(selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
+                BlockSelectionView(state: gridState)
                     .frame(height: 120)
                     .padding(.horizontal, Theme.Layout.padding)
                     .padding(.bottom, 20)
             }
             
-            if let block = selectedBlock, isDragging {
-                DraggableBlock(
-                    block: block,
-                    position: $blockPosition,
-                    isDragging: $isDragging,
-                    grid: $grid
-                )
+            if let block = gridState.selectedBlock, gridState.isDragging {
+                DraggableBlock(block: block, state: gridState)
             }
             
-            if isLoading {
-                LoadingView()
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isLoading = false
-                            }
-                        }
-                    }
+            // Add Debug Panel in DEBUG mode only
+            #if DEBUG
+            VStack {
+                DebugPanel(state: gridState)
+                    .frame(width: 200)
+                    .padding()
+                Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            #endif
         }
         .coordinateSpace(name: "gameArea")
     }

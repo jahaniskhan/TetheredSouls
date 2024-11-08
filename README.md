@@ -46,3 +46,51 @@ TetheredSouls is a strategic block puzzle game where players arrange various sha
 
 ## Installation
 1. Clone the repository
+
+
+
+Dragged Block Centering:
+
+Before Offset:
+    Cursor Position (.)
+    +--------+
+    |        |
+    |  2x2   |
+    |  Block |
+    +--------+
+         .
+
+After Offset:
+    Cursor Position (.)
+         .
+    +--------+
+    |        |
+    |  2x2   |
+    |  Block |
+    +--------+
+
+
+Heart Particle Positioning:
+
+Grid Cell Reference:
+    0    1    2    3
+  +----+----+----+----+
+0 |    |    |    |    |
+  +----+----+----+----+
+1 |    | B  B    |    |  ♥ <- Heart at Y+50
+  +----+----+----+----+
+2 |    | B  B    |    |
+  +----+----+----+----+
+3 |    |    |    |    |
+  +----+----+----+----+
+
+Side View of Heart Position:
+    ♥  <- Y + 50
+    
+   +--+
+   |  |  <- Block
+   |  |
+   +--+
+    |
+    |  <- Grid Cell
+    |
