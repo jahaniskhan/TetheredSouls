@@ -1,4 +1,9 @@
 import SwiftUI
+import Foundation
+import Combine
+import CoreGraphics
+import CoreFoundation
+
 
 struct ContentView: View {
     private let columns: Int = 10
@@ -12,43 +17,79 @@ struct ContentView: View {
     @State private var isDragging = false
     @State private var blockPosition: CGPoint?
     
+    @State private var plantPhase = 0.0
+    let plantTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    
+    var decorativeElements: some View {
+        ZStack {
+            // Static trees
+            ForEach(0..<3) { i in
+                Plant(height: CGFloat.random(in: 120...200), phase: 0)
+                    .foregroundColor(Color(hex: "BFD8B8").opacity(0.6))
+                    .frame(width: 60)
+                    .position(
+                        x: UIScreen.main.bounds.width * CGFloat(i + 1) / 4,
+                        y: UIScreen.main.bounds.height * 0.7
+                    )
+            }
+            
+            // Animated decorative elements
+            ForEach(0..<12) { i in
+                let items = ["✧", "⋆", "❀"]
+                Text(items[i % items.count])
+                    .font(.system(size: CGFloat.random(in: 12...20)))
+                    .foregroundColor(Theme.block1.opacity(0.3))
+                    .rotationEffect(.degrees(Double.random(in: 0...360)))
+                    .offset(y: -20 * sin(plantPhase + Double(i)))
+                    .position(
+                        x: CGFloat.random(in: 50...UIScreen.main.bounds.width-50),
+                        y: CGFloat.random(in: 100...UIScreen.main.bounds.height-100)
+                    )
+            }
+        }
+    }
+    
     var body: some View {
         ZStack {
-            Color(red: 0.05, green: 0.05, blue: 0.05)
+            Color(hex: "FFF9F2")
                 .ignoresSafeArea()
             
-            VStack(spacing: Theme.Layout.spacing) {
-                // Top bar with game panel
-                HStack(spacing: Theme.Layout.spacing) {
-                    GamePanel(score: score, currentStreak: currentStreak)
-                        .frame(width: UIScreen.main.bounds.width * 0.7)
-                    
-                    Spacer()
-                    
-                    // FX indicators
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(Theme.tertiary)
-                            .frame(width: 6, height: 6)
-                        Text("FX")
-                            .font(Theme.Typography.caption)
-                            .foregroundColor(Theme.textSecondary)
-                    }
+            // Background doodles tied to streak, now using the color property
+            if currentStreak > 0 {
+                ForEach(0..<min(currentStreak, 12), id: \.self) { i in
+                    DoodleElement(
+                        type: [.star, .heart, .spiral, .scribble][i % 4],
+                        rotation: Double.random(in: -15...15),
+                        streak: currentStreak
+                    )
+                    .frame(width: 80, height: 80)  // Made even larger
+                    .position(
+                        x: CGFloat.random(in: 50...UIScreen.main.bounds.width-50),
+                        y: CGFloat.random(in: UIScreen.main.bounds.height * 0.3...UIScreen.main.bounds.height * 0.7)
+                    )
                 }
-                .padding(.horizontal, Theme.Layout.padding)
+            }
+            
+            decorativeElements
+            
+            VStack(spacing: 24) {
+                GamePanel(score: score, currentStreak: currentStreak, selectedBlock: selectedBlock)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
                 
-                Spacer()
+                #if DEBUG
+                GamePanelDebugger(score: $score, currentStreak: $currentStreak)
+                    .padding(.horizontal, 20)
+                #endif
                 
                 GridView(grid: $grid, selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
-                    .padding(.horizontal, Theme.Layout.padding)
-                
-                Spacer()
+                    .padding(.horizontal, 20)
                 
                 BlockSelectionView(selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
-                    .frame(height: 120)
-                    .padding(.horizontal, Theme.Layout.padding)
-                    .padding(.bottom, 20)
+                    .frame(height: 140)
+                    .padding(.horizontal, 20)
             }
+            .padding(.vertical, 16)
             
             if let block = selectedBlock, isDragging {
                 DraggableBlock(
@@ -71,6 +112,41 @@ struct ContentView: View {
             }
         }
         .coordinateSpace(name: "gameArea")
+    }
+}
+
+struct Plant: View {
+    let height: CGFloat
+    let phase: Double
+    
+    private func wobble(_ point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: point.x + sin(phase * 2) * 5,
+            y: point.y + cos(phase * 1.5) * 3
+        )
+    }
+    
+    var body: some View {
+        Path { path in
+            // Stem
+            path.move(to: wobble(CGPoint(x: 30, y: height)))
+            path.addQuadCurve(
+                to: wobble(CGPoint(x: 30, y: 0)),
+                control: wobble(CGPoint(x: 35, y: height/2))
+            )
+            
+            // Leaves
+            for i in stride(from: 10, through: height-20, by: 30) {
+                let side = i.truncatingRemainder(dividingBy: 60) == 10
+                let leafTip = wobble(CGPoint(x: side ? 10 : 50, y: i-10))
+                path.move(to: wobble(CGPoint(x: 30, y: i)))
+                path.addQuadCurve(
+                    to: leafTip,
+                    control: wobble(CGPoint(x: side ? 15 : 45, y: i-5))
+                )
+            }
+        }
+        .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round))
     }
 }
 

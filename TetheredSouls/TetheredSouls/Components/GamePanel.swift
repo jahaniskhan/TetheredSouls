@@ -1,150 +1,226 @@
 import SwiftUI
+import UIKit
+import Foundation
 
 struct GamePanel: View {
     let score: Int
     let currentStreak: Int
-    let maxStreak: Int = 3
-    let progressValue: Double = 0.4
-    @State private var systemTime = Date()
-    @State private var systemStatus = "IDLE"
-    @State private var cpuLoad = [0.2, 0.4, 0.6, 0.3, 0.5]
+    let selectedBlock: Block?
     
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var achievements: [Achievement] = []
+    @State private var isPlacingSticker = false
+    @State private var lastPlacementTime: Date?
+    @State private var feedbackGenerator = UIImpactFeedbackGenerator(style: .soft)
     
+    // Add new visual states
+    @State private var isScoreAnimating = false
+    @State private var lastScore = 0
+    @State private var streakGlowOpacity = 0.0
+    
+    private let maxStamps = 16
+    private let minStampSpacing: CGFloat = 40
+    private let hapticCooldown: TimeInterval = 0.5
+    
+    private let glowColors: [Color] = [
+        .pink.opacity(0.3),
+        .yellow.opacity(0.2),
+        .blue.opacity(0.2)
+    ]
+    
+    // Enhanced stamp collection
+    private let stampSizes: [StickerType: CGFloat] = [
+        .amore: 70,      // Love letter stamp
+        .cherry: 55,     // Sweet cherry
+        .safetypin: 65,  // Safety pin
+        .cannibal: 60,   // Cannibal flower
+        .flowerstamp: 58 // Classic flower
+    ]    
     var body: some View {
-        HStack(spacing: 16) {
-            // Left status matrix
-            VStack(spacing: 4) {
-                // Signal strength indicators
-                HStack(spacing: 2) {
-                    ForEach(0..<3) { i in
-                        Rectangle()
-                            .fill(Theme.quaternary.opacity(i == 0 ? 1 : 0.3))
-                            .frame(width: 3, height: 6 - Double(i))
-                    }
-                }
-                Circle()
-                    .fill(Theme.tertiary.opacity(0.3))
-                    .frame(width: 6, height: 6)
+        GeometryReader { geometry in
+            ZStack {
+                // Paper texture overlay
+                Image("paper-texture")
+                    .resizable()
+                    .opacity(0.1)
+                    .allowsHitTesting(false)
                 
-                // Memory status
-                Text("64K")
-                    .font(.system(size: 4, weight: .medium, design: .monospaced))
-                    .foregroundColor(Theme.textSecondary)
-            }
-            
-            // Digital displays
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    Text("\(String(format: "%03.1f", Double(score)/10))")
-                        .font(.system(size: 24, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.text)
-                    
-                    // CPU usage display
-                    VStack(spacing: 1) {
-                        ForEach(cpuLoad, id: \.self) { load in
-                            Rectangle()
-                                .fill(Theme.quaternary.opacity(load))
-                                .frame(width: 8, height: 1)
+                // Warm paper wall
+                Theme.background
+                
+                // Achievement tattoo collection
+                ForEach(achievements) { achievement in
+                    Image(achievement.type.rawValue)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: stampSizes[achievement.type] ?? 60)
+                        .rotationEffect(.degrees(achievement.rotation))
+                        .scaleEffect(isPlacingSticker ? 1.1 : 1.0)
+                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                        .position(achievement.position)
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale.combined(with: .opacity).animation(.spring(response: 0.4, dampingFraction: 0.6)),
+                                removal: .opacity.animation(.easeOut(duration: 0.2))
+                            )
+                        )
+                }
+                
+                // Core displays as part of collection
+                VStack(spacing: 0) {
+                    HStack(alignment: .top) {
+                        // NotionFace containment - proper framing
+                        ZStack {
+                            Image("frame")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 100)
+                                .opacity(0.95)  // Subtle blend with paper
+                            
+                            NotionFace()
+                                .frame(width: 60)
+                                .offset(y: -1)  // Optical adjustment based on frame.png's scalloped edge
+                        }
+                        .modifier(WobbleAnimation(isEnabled: true))
+                        .padding(.top, 20)
+                        
+                        Spacer()
+                        
+                        // Score as tattoo piece
+                        ZStack {
+                            Image("frame")
+                                .resizable()
+                                .frame(width: 80, height: 80)
+                            
+                            VStack(spacing: -5) {
+                                if currentStreak > 0 {
+                                    Text("×\(currentStreak)")
+                                        .font(Theme.Typography.small)
+                                }
+                                Text("\(score)")
+                                    .font(.system(size: 32, weight: .bold))
+                                    .foregroundColor(Theme.textPrimary)
+                                    .rotationEffect(.degrees(isScoreAnimating ? 5 : 0))
+                                    .animation(.spring(response: 0.3), value: isScoreAnimating)
+                            }
                         }
                     }
-                }
-                
-                HStack(spacing: 6) {
-                    // Hearts
-                    ForEach(0..<3) { i in
-                        Image(systemName: i < currentStreak ? "heart.fill" : "heart")
-                            .foregroundColor(i < currentStreak ? Theme.quaternary : Theme.textSecondary)
-                            .font(.system(size: 10))
-                    }
+                    .padding()
                     
-                    // System info
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("SYS.01")
-                            .font(.system(size: 6, weight: .medium, design: .monospaced))
-                        Text(systemTime.formatted(.dateTime.hour().minute()))
-                            .font(.system(size: 6, weight: .medium, design: .monospaced))
-                    }
-                    .foregroundColor(Theme.textSecondary)
+                    Spacer()
                 }
             }
-            
-            Spacer()
-            
-            // Center status indicators
-            VStack(spacing: 4) {
-                // Progress indicators
-                VStack(spacing: 2) {
-                    // Bee progress
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(Theme.surface)
-                            .frame(width: 40, height: 2)
-                        
-                        Rectangle()
-                            .fill(Theme.quaternary)
-                            .frame(width: 40 * progressValue, height: 2)
-                        
-                        Image(systemName: "ant.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(Theme.quaternary)
-                            .offset(x: 40 * progressValue - 4, y: -6)
-                    }
-                    
-                    // System status
-                    Text(systemStatus)
-                        .font(.system(size: 4, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.quaternary)
+            .onChange(of: currentStreak) { oldStreak, newStreak in
+                if newStreak > 0 && newStreak.isMultiple(of: 5) {
+                    addAchievement(in: geometry)
                 }
-                
-                // Signal matrix
-                HStack(spacing: 2) {
-                    ForEach(0..<4) { i in
-                        Circle()
-                            .fill(Theme.primary.opacity(i < 2 ? 1 : 0.3))
-                            .frame(width: 2, height: 2)
-                    }
-                }
-            }
-            
-            // Right indicators
-            HStack(spacing: 8) {
-                // Status matrix
-                VStack(spacing: 3) {
-                    ForEach(0..<3) { i in
-                        Rectangle()
-                            .fill(Theme.primary.opacity(i == 0 ? 1 : 0.3))
-                            .frame(width: 10, height: 2)
-                    }
-                }
-                
-                // Level and performance
-                VStack(spacing: 2) {
-                    Text("L1")
-                        .font(.system(size: 6, weight: .medium, design: .monospaced))
-                    Text("\(Int(progressValue * 100))%")
-                        .font(.system(size: 4, weight: .medium, design: .monospaced))
-                }
-                .foregroundColor(Theme.textSecondary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Theme.background)
-        .cornerRadius(2)
-        .overlay(Rectangle().stroke(Theme.stroke, lineWidth: 1))
-        .onReceive(timer) { time in
-            systemTime = time
-            systemStatus = ["IDLE", "PROC", "SYNC"][Int.random(in: 0...2)]
-            // Simulate CPU load changes
-            cpuLoad = cpuLoad.map { min(1, max(0, $0 + Double.random(in: -0.2...0.2))) }
+        .frame(height: 200)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+    
+    private func addAchievement(in geometry: GeometryProxy) {
+        // Prevent achievement spam
+        if lastPlacementTime == nil {
+            lastPlacementTime = Date()
+        } else if let lastTime = lastPlacementTime,
+                  Date().timeIntervalSince(lastTime) <= hapticCooldown {
+            return
+        }
+        
+        // Hard cap on stamps - now with proper return
+        if achievements.count >= maxStamps {
+            achievements.removeFirst()  // FIFO for stamps
+        }
+        
+        // Improved safe zones for more organic placement
+        let safeX = Double(geometry.size.width * 0.15)...Double(geometry.size.width * 0.85)
+        let safeY = Double(geometry.size.height * 0.1)...Double(geometry.size.height * 0.9)
+        
+        // Try to find non-overlapping position
+        var attempts = 0
+        var newPosition: CGPoint
+        repeat {
+            newPosition = CGPoint(
+                x: CGFloat(Double.random(in: safeX)),
+                y: CGFloat(Double.random(in: safeY))
+            )
+            attempts += 1
+        } while isOverlapping(at: newPosition) && attempts < 5
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            achievements.append(Achievement(
+                type: StickerType.allCases.randomElement() ?? .flowerstamp,
+                position: newPosition,
+                rotation: Double.random(in: -15...15)
+            ))
+            
+            feedbackGenerator.impactOccurred(intensity: 0.7)
+        }
+        
+        lastPlacementTime = Date()
+    }
+    
+    private func isOverlapping(at newPosition: CGPoint) -> Bool {
+        achievements.contains { achievement in
+            let distance = sqrt(
+                pow(achievement.position.x - newPosition.x, 2) +
+                pow(achievement.position.y - newPosition.y, 2)
+            )
+            return distance < minStampSpacing
         }
     }
 }
 
-#Preview {
-    GamePanel(score: 193, currentStreak: 2)
-        .frame(width: 280)
+// MARK: - Supporting Types
+struct Achievement: Identifiable {
+    let id = UUID()
+    let type: StickerType
+    let position: CGPoint
+    let rotation: Double
+}
+
+enum StickerType: String, CaseIterable {
+    case flowerstamp, cherry, cannibal, safetypin, amore
+}
+
+struct WobbleAnimation: ViewModifier {
+    let isEnabled: Bool
+    
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(isEnabled && !reduceMotion ? 2 : 0))
+            .animation(
+                isEnabled && !reduceMotion ? 
+                    .easeInOut(duration: 1.5)
+                    .repeatForever(autoreverses: true) : 
+                    .default,
+                value: isEnabled
+            )
+    }
+}
+
+// MARK: - Preview Provider
+struct GamePanel_Previews: PreviewProvider {
+    static var previews: some View {
+        VStack(spacing: 20) {
+            // Test streak = 5
+            GamePanel(
+                score: 100,
+                currentStreak: 5,
+                selectedBlock: nil
+            )
+            
+            // Test streak = 10
+            GamePanel(
+                score: 200,
+                currentStreak: 10,
+                selectedBlock: nil
+            )
+        }
         .padding()
-        .background(Color.black)
+        .previewDisplayName("Streak Tests")
+    }
 }

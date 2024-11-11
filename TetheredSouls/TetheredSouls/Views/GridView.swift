@@ -120,10 +120,62 @@ struct GridView: View {
                 width: cellSize * 10 + Theme.Layout.gridSpacing * 9,
                 height: cellSize * 10 + Theme.Layout.gridSpacing * 9
             )
-            .background(Theme.background)
-            .cornerRadius(Theme.Layout.cornerRadius)
+            .modifier(GridStyleModifier())
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }
         .frame(height: cellSize * 10 + Theme.Layout.gridSpacing * 9)
+    }
+}
+
+struct GridStyleModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Layout.cornerRadius)
+                    .fill(Color(hex: "F5E6D3")) // Warm paper color
+                    .shadow(
+                        color: Color(hex: "8B4513").opacity(0.2),
+                        radius: 12,
+                        x: 0,
+                        y: 8
+                    )
+            )
+            .overlay(
+                GridLines()
+                    .stroke(
+                        Color(hex: "6B5B4E").opacity(0.15),
+                        style: StrokeStyle(
+                            lineWidth: 0.5,
+                            lineCap: .round
+                        )
+                    )
+            )
+            .rotation3DEffect(
+                .degrees(8),
+                axis: (x: 1, y: 0, z: 0),
+                anchor: .center,
+                perspective: 0.2
+            )
+    }
+}
+
+struct GridLines: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let gridSize = 10
+        let cellSize = rect.width / CGFloat(gridSize)
+        
+        // Draw minimal grid lines
+        for i in 0...gridSize {
+            let x = cellSize * CGFloat(i)
+            let y = cellSize * CGFloat(i)
+            
+            path.move(to: CGPoint(x: x, y: 0))
+            path.addLine(to: CGPoint(x: x, y: rect.height))
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: rect.width, y: y))
+        }
+        
+        return path
     }
 }

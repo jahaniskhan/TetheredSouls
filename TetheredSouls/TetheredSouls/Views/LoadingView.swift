@@ -22,7 +22,7 @@ struct LoadingView: View {
                 
                 Text("LOADING")
                     .font(Theme.Typography.caption)
-                    .foregroundColor(Theme.text)
+                    .foregroundColor(Theme.textPrimary)
             }
         }
     }

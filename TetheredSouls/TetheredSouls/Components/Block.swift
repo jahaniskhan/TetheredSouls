@@ -39,91 +39,88 @@ struct Block: Identifiable {
         return rotated
     }
     
-    // No, this is not syntactically correct. There are two issues:
-    // 1. Missing comma after the 1x4 Line block
-    // 2. Duplicate 3x3 Cross block definition
     static let blocks: [Block] = [
         // 1x1 Single
-        Block(shape: [[true]], color: .neonCyan),
+        Block(shape: [[true]], color: .softCoral),
         
         // 2x2 Square
         Block(shape: [
             [true, true],
             [true, true]
-        ], color: .plasmaOrange),
+        ], color: .mutedPink),
         
         // 1x3 Line
-        Block(shape: [[true, true, true]], color: .digitalYellow),
+        Block(shape: [[true, true, true]], color: .warmBeige),
         
         // 2x2 L-shape
         Block(shape: [
             [true, false],
             [true, true]
-        ], color: .techPurple),
+        ], color: .dustyRose),
         
         // 3x3 Cross
         Block(shape: [
             [false, true, false],
             [true, true, true],
             [false, true, false]
-        ], color: .signalRed),
+        ], color: .sageGreen),
         
         // 3x3 L-shape
         Block(shape: [
             [true, false, false],
             [true, false, false],
             [true, true, true]
-        ], color: .synthBlue),
+        ], color: .paleYellow),
         
         // 3x2 T-shape
         Block(shape: [
             [true, true, true],
             [false, true, false]
-        ], color: .matrixGreen),
+        ], color: .lightGray),
         
         // 3x2 Zigzag
         Block(shape: [
             [true, true, false],
             [false, true, true]
-        ], color: .neonCyan),
+        ], color: .softCoral),
         
         // 1x4 Line
-        Block(shape: [[true, true, true, true]], color: .plasmaOrange),
+        Block(shape: [[true, true, true, true]], color: .mutedPink),
         
         // 3x3 Square
         Block(shape: [
             [true, true, true],
             [true, true, true],
             [true, true, true]
-        ], color: .techPurple),
+        ], color: .dustyRose),
         
         // 3x3 Corner
         Block(shape: [
             [true, true, true],
             [true, false, false],
             [true, false, false]
-        ], color: .plasmaOrange)
+        ], color: .mutedPink)
     ]
 }
 
 enum BlockColor {
-    case neonCyan      // Digital display cyan
-    case plasmaOrange  // Warning display orange
-    case digitalYellow // Status indicator yellow
-    case matrixGreen   // Terminal green
-    case synthBlue     // Electric blue
-    case techPurple    // Digital purple
-    case signalRed     // Alert red
+    case softCoral
+    case mutedPink
+    case warmBeige
+    case dustyRose
+    case sageGreen
+    case paleYellow
+    case lightGray
     
     var color: Color {
         switch self {
-        case .neonCyan:      return Color(red: 0.2, green: 0.9, blue: 0.8)
-        case .plasmaOrange:  return Color(red: 0.996, green: 0.396, blue: 0.208)
-        case .digitalYellow: return Color(red: 0.996, green: 0.847, blue: 0.208)
-        case .matrixGreen:   return Color(red: 0.2, green: 0.8, blue: 0.4)
-        case .synthBlue:     return Color(red: 0.4, green: 0.7, blue: 0.9) // Softer blue
-        case .techPurple:    return Color(red: 0.6, green: 0.2, blue: 0.8)
-        case .signalRed:     return Color(red: 0.996, green: 0.251, blue: 0.176)
+        case .softCoral:   return Theme.block1    // Soft beige
+        case .mutedPink:   return Theme.block2    // Sage green
+        case .warmBeige:   return Theme.block3    // Muted yellow
+        case .dustyRose:   return Theme.block4    // Dusty rose
+        case .sageGreen:   return Theme.block5    // Soft blue
+        case .paleYellow:  return Theme.block3    // Use solid muted yellow
+        case .lightGray:   return Theme.quaternary // Use solid light gray
         }
     }
 }
