@@ -7,116 +7,54 @@
 
 import SwiftUI
 
-struct GamePanelDebugger: View {
-    @Binding var score: Int
-    @Binding var currentStreak: Int
-    @State private var isExpanded = false
-    @State private var showStateInspector = false
-    @State private var selectedSticker: StickerType = .flowerstamp
+struct EyeDebugData {
+    let eyeCenter: CGPoint    // E(x,y) from math model
+    let touchPoint: CGPoint   // P(x,y) from math model
+    let boundaryA: CGFloat    // Horizontal radius
+    let boundaryB: CGFloat    // Vertical radius
     
-    // Debug controls
-    @State private var streakInput: String = "0"
-    @State private var scoreInput: String = "0"
-    
-    var streakTestingSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Streak Testing")
-                .font(.caption)
-            
-            Stepper("Streak: \(currentStreak)", 
-                value: $currentStreak,
-                in: 0...100)
-            
-            HStack {
-                ForEach([5, 10, 15], id: \.self) { value in
-                    Button("Hit \(value)") {
-                        withAnimation { currentStreak = value }
-                    }
-                }
-            }
-        }
+    var angle: Double {
+        // θ = arctan((y-Ey)/(x-Ex))
+        let deltaY = touchPoint.y - eyeCenter.y
+        let deltaX = touchPoint.x - eyeCenter.x
+        return atan2(deltaY, deltaX) * 180 / Double.pi
     }
     
-    var body: some View {
-        VStack(spacing: 12) {
-            // Debug Header
-            HStack {
-                Text("🛠 Debug Controls")
-                    .font(.system(size: 12, weight: .medium))
-                
-                Spacer()
-                
-                Button(action: { isExpanded.toggle() }) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .foregroundColor(Theme.textSecondary)
-                }
-            }
-            .padding(.horizontal, 12)
-            
-            if isExpanded {
-                // Streak Controls
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Streak Testing")
-                        .font(.caption)
-                        .foregroundColor(Theme.textSecondary)
-                    
-                    HStack {
-                        Button("🎯 Hit Streak 5") {
-                            withAnimation { currentStreak = 5 }
-                        }
-                        Button("🎯 Hit Streak 10") {
-                            withAnimation { currentStreak = 10 }
-                        }
-                    }
-                    .buttonStyle(DebugButtonStyle())
-                    
-                    // Score Controls
-                    Text("Score Testing")
-                        .font(.caption)
-                        .foregroundColor(Theme.textSecondary)
-                    
-                    HStack {
-                        Button("💯 Add 100") {
-                            withAnimation { score += 100 }
-                        }
-                        Button("💥 Reset") {
-                            withAnimation {
-                                score = 0
-                                currentStreak = 0
-                            }
-                        }
-                    }
-                    .buttonStyle(DebugButtonStyle())
-                }
-                .padding(12)
-                .background(Theme.surface)
-                .cornerRadius(8)
-            }
-        }
-        .padding(8)
-        .background(Theme.secondary.opacity(0.5))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Theme.stroke, lineWidth: 1)
-        )
+    var ellipticalDistance: Double {
+        // (x²/a²) + (y²/b²) = 1
+        let normalizedX = pow((touchPoint.x - eyeCenter.x) / boundaryA, 2)
+        let normalizedY = pow((touchPoint.y - eyeCenter.y) / boundaryB, 2)
+        return sqrt(normalizedX + normalizedY)
+    }
+    
+    var formattedString: String {
+        """
+        Eye Center: (x: \(String(format: "%.2f", eyeCenter.x)), y: \(String(format: "%.2f", eyeCenter.y)))
+        Touch Point: (x: \(String(format: "%.2f", touchPoint.x)), y: \(String(format: "%.2f", touchPoint.y)))
+        Angle: \(String(format: "%.1f°", angle))
+        Boundary Distance: \(String(format: "%.2f", ellipticalDistance))
+        """
     }
 }
 
-struct DebugButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(configuration.isPressed ? 
-                          Theme.primary.opacity(0.2) : 
-                          Theme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Theme.stroke, lineWidth: 1)
-            )
+struct GamePanelDebugger: View {
+    @Binding var eyePosition: CGPoint
+    
+    private var debugData: EyeDebugData {
+        EyeDebugData(position: eyePosition)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Eye Position")
+                .font(.caption)
+                .foregroundColor(Theme.textSecondary)
+            
+            Text(debugData.formattedString)
+                .font(.system(size: 12, weight: .medium))
+        }
+        .padding(12)
+        .background(Theme.surface)
+        .cornerRadius(8)
     }
 }

@@ -2,6 +2,27 @@ import SwiftUI
 import UIKit
 import Foundation
 
+// Add this at the top with other types
+class NotionFaceProxy: ObservableObject {
+    @Published var isWatching: Bool = false
+    @Published var mood: CatMood = .normal
+    @Published var eyePosition: CGPoint = .zero
+    
+    func updateMood(_ newMood: CatMood) {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            mood = newMood
+            isWatching = true
+        }
+    }
+    
+    func resetMood() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            mood = .normal
+            isWatching = false
+        }
+    }
+}
+
 struct GamePanel: View {
     let score: Int
     let currentStreak: Int
@@ -11,6 +32,8 @@ struct GamePanel: View {
     @State private var isPlacingSticker = false
     @State private var lastPlacementTime: Date?
     @State private var feedbackGenerator = UIImpactFeedbackGenerator(style: .soft)
+    @StateObject private var notionFaceRef = NotionFaceProxy()
+    @Binding var debugEyePosition: CGPoint
     
     // Add new visual states
     @State private var isScoreAnimating = false
@@ -68,17 +91,19 @@ struct GamePanel: View {
                 // Core displays as part of collection
                 VStack(spacing: 0) {
                     HStack(alignment: .top) {
-                        // NotionFace containment - proper framing
+                        // NotionFace containment - tighter framing
                         ZStack {
                             Image("frame")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 100)
-                                .opacity(0.95)  // Subtle blend with paper
+                                .frame(width: 85)
+                                .colorMultiply(Color(red: 99/255, green: 32/255, blue: 27/255))
+                                .opacity(0.95)
                             
-                            NotionFace()
-                                .frame(width: 60)
-                                .offset(y: -1)  // Optical adjustment based on frame.png's scalloped edge
+                            NotionFace(debugEyePosition: $debugEyePosition)
+                                .frame(width: 65)  // Keep existing frame
+                                .offset(y: -1)
+                                .environmentObject(notionFaceRef)
                         }
                         .modifier(WobbleAnimation(isEnabled: true))
                         .padding(.top, 20)
@@ -87,22 +112,31 @@ struct GamePanel: View {
                         
                         // Score as tattoo piece
                         ZStack {
-                            Image("frame")
-                                .resizable()
-                                .frame(width: 80, height: 80)
+                            // Score number behind the frame
+                            Text("\(score)")
+                                .font(.custom("Georgia-Bold", size: 52))
+                                .foregroundColor(Color(red: 99/255, green: 32/255, blue: 27/255))
+                                .opacity(0.85)
+                                .rotationEffect(.degrees(isScoreAnimating ? 5 : 0))
+                                .animation(.spring(response: 0.3), value: isScoreAnimating)
                             
-                            VStack(spacing: -5) {
-                                if currentStreak > 0 {
-                                    Text("×\(currentStreak)")
-                                        .font(Theme.Typography.small)
-                                }
-                                Text("\(score)")
-                                    .font(.system(size: 32, weight: .bold))
+                            Image("scoreframe")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 110, height: 110)
+                                .colorMultiply(Color(red: 99/255, green: 32/255, blue: 27/255))
+                                .opacity(0.95)
+                            
+                            // Streak on top
+                            if currentStreak > 0 {
+                                Text("×\(currentStreak)")
+                                    .font(Theme.Typography.small)
                                     .foregroundColor(Theme.textPrimary)
-                                    .rotationEffect(.degrees(isScoreAnimating ? 5 : 0))
-                                    .animation(.spring(response: 0.3), value: isScoreAnimating)
+                                    .offset(y: -35)
                             }
                         }
+                        .padding(.top, 5)  // Keep it high
+                        .padding(.trailing, -15)  // Keep it to the right
                     }
                     .padding()
                     
@@ -210,14 +244,16 @@ struct GamePanel_Previews: PreviewProvider {
             GamePanel(
                 score: 100,
                 currentStreak: 5,
-                selectedBlock: nil
+                selectedBlock: nil,
+                debugEyePosition: .constant(.zero)
             )
             
             // Test streak = 10
             GamePanel(
                 score: 200,
                 currentStreak: 10,
-                selectedBlock: nil
+                selectedBlock: nil,
+                debugEyePosition: .constant(.zero)
             )
         }
         .padding()
