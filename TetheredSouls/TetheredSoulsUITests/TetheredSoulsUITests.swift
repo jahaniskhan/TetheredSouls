@@ -7,37 +7,99 @@
 
 import XCTest
 
-final class TetheredSoulsUITests: XCTestCase {
-
+final class CatFeaturesUITests: XCTestCase {
+    
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
-    @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+        
+        // Always launch in portrait mode for consistent coordinates
         let app = XCUIApplication()
+        app.launchArguments = ["UI-Testing"]  // Optional: Add if you want to detect UI testing in app
         app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
     }
-
+    
     @MainActor
-    func testLaunchPerformance() throws {
-        if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
-            // This measures how long it takes to launch your application.
-            measure(metrics: [XCTApplicationLaunchMetric()]) {
-                XCUIApplication().launch()
+    func testEyeMovement() throws {
+        let app = XCUIApplication()
+        
+        // Access your cat view using accessibility identifier
+        let catView = app.otherElements["CatView"]
+        XCTAssertTrue(catView.exists, "Cat view should be visible")
+        
+        // UI tests must launch the application that they test.
+        // Test center position
+        let centerPoint = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        centerPoint.tap()
+        
+        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        // Test eye tracking at different points
+        let testPoints: [(CGVector, String)] = [
+            (CGVector(dx: 0.2, dy: 0.2), "top-left"),
+            (CGVector(dx: 0.8, dy: 0.2), "top-right"),
+            (CGVector(dx: 0.2, dy: 0.8), "bottom-left"),
+            (CGVector(dx: 0.8, dy: 0.8), "bottom-right")
+        ]
+        
+        for (vector, description) in testPoints {
+            let point = app.coordinate(withNormalizedOffset: vector)
+            point.tap()
+            
+            // Verify debug panel updates
+            let debugPanel = app.staticTexts["EyeDebugPanel"]
+            XCTAssertTrue(debugPanel.exists, "Debug panel should be visible after tapping \(description)")
+            
+            // Give time for animation
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+    }
+    
+    @MainActor
+    func testMoodTransitions() throws {
+        let app = XCUIApplication()
+        
+        // Test different moods if you have UI controls for them
+        let moods = ["normal", "happy", "sad", "sleepy", "watching"]
+        
+        for mood in moods {
+            let moodButton = app.buttons["\(mood)MoodButton"]
+            if moodButton.exists {
+                moodButton.tap()
+                
+                // Verify mouth asset changed
+                let mouthImage = app.images["\(mood)Mouth"]
+                XCTAssertTrue(mouthImage.exists, "Mouth should change for \(mood) mood")
+                
+                // Give time for animation
+                Thread.sleep(forTimeInterval: 0.5)
             }
         }
+    }
+    
+    @MainActor
+    func testEyeTrackingPerformance() throws {
+        let app = XCUIApplication()
+        
+        measure(metrics: [XCTCPUMetric(), XCTMemoryMetric()]) {
+            // Test a smooth eye movement
+            let startPoint = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
+            let endPoint = app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+            
+            startPoint.press(forDuration: 0.1, thenDragTo: endPoint)
+        }
+    }
+    
+    @MainActor
+    func testAccessibility() throws {
+        let app = XCUIApplication()
+        
+        // Test voice over labels
+        let catView = app.otherElements["CatView"]
+        XCTAssertTrue(catView.exists)
+        XCTAssertNotNil(catView.label, "Cat view should have accessibility label")
+        
+        // Test debug panel accessibility
+        let debugPanel = app.staticTexts["EyeDebugPanel"]
+        XCTAssertTrue(debugPanel.exists)
+        XCTAssertNotNil(debugPanel.label, "Debug panel should have accessibility label")
     }
 }

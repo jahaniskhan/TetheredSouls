@@ -33,7 +33,6 @@ struct GamePanel: View {
     @State private var lastPlacementTime: Date?
     @State private var feedbackGenerator = UIImpactFeedbackGenerator(style: .soft)
     @StateObject private var notionFaceRef = NotionFaceProxy()
-    @Binding var debugEyePosition: CGPoint
     
     // Add new visual states
     @State private var isScoreAnimating = false
@@ -100,7 +99,7 @@ struct GamePanel: View {
                                 .colorMultiply(Color(red: 99/255, green: 32/255, blue: 27/255))
                                 .opacity(0.95)
                             
-                            NotionFace(debugEyePosition: $debugEyePosition)
+                            NotionFace()
                                 .frame(width: 65)  // Keep existing frame
                                 .offset(y: -1)
                                 .environmentObject(notionFaceRef)
@@ -244,16 +243,14 @@ struct GamePanel_Previews: PreviewProvider {
             GamePanel(
                 score: 100,
                 currentStreak: 5,
-                selectedBlock: nil,
-                debugEyePosition: .constant(.zero)
+                selectedBlock: nil                
             )
             
             // Test streak = 10
             GamePanel(
                 score: 200,
                 currentStreak: 10,
-                selectedBlock: nil,
-                debugEyePosition: .constant(.zero)
+                selectedBlock: nil                
             )
         }
         .padding()

@@ -1,0 +1,46 @@
+
+
+Key Implementation Fixes:
+
+1. Coordinate System Fixes:
+   - Convert touch points to correct coordinate space using `convert(_:to:)` method
+   - Set proper anchorPoint and position for layers
+   - Ensure consistent coordinate system across all UI elements
+
+2. Eye Positioning:
+   - Position eyes symmetrically using Auto Layout or frame calculations
+   - Set consistent reference points for both eyes
+   - Use superview dimensions for proper positioning
+
+3. Pupil Movement Mathematics:
+   ```swift
+   // Use atan2 for angle calculations
+   let angle = atan2(touchPoint.y - eyeCenter.y, touchPoint.x - eyeCenter.x)
+   
+   // Ellipse boundary check
+   let isInBounds = (x*x)/(a*a) + (y*y)/(b*b) <= 1
+   ```
+
+4. Shape and Rotation:
+   - Set proper anchor point for pupil rotation
+   - Ensure teardrop shape points toward input
+   - Keep rounded edge aligned with boundary
+
+5. Scaling Considerations:
+   - Use consistent contentScaleFactor
+   - Match image sizes to device requirements
+   - Apply uniform scaling across components
+
+Debug Checklist:
+- Add eye center markers (dots)
+- Draw direction lines from eye centers to touch points
+- Show elliptical boundaries
+- Display calculated angles near eyes
+- Add pupil position indicators
+
+Common Issues to Check:
+- Division by zero in angle calculations
+- Coordinate system misalignments
+- Asymmetrical eye positioning
+- Incorrect boundary dimensions
+- Scaling inconsistencies

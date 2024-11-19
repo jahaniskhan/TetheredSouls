@@ -1,7 +1,5 @@
 MATHEMATICAL MODEL:
 
-NOTE: DO NOT RUIN UI DO NOT DISPLACE UI JUST CREATE INVISIBLE LOGIC IN FILES 
-THAT CAN BE PRINTED IN DEBUG PANEL
 
 COORDINATE SYSTEM:
 
@@ -24,8 +22,13 @@ Where a and b are the horizontal/vertical radii from your eye center
 
 TANGENCY CALCULATION:
 
+For any point (x,y) on the ellipse, the tangent angle φ is given by:
+φ = arctan(-b²x/a²y)
 
-For any point P(x,y) from user input:
+Special case: When y = 0
+- If x = 0: φ = 0 
+- If x > 0: φ = -π/2
+- If x < 0: φ = π/2
 
 Calculate θ = arctan((y-Ey)/(x-Ex))
 This gives you the angle from eye center to touch point
@@ -37,15 +40,14 @@ The pupil's flat edge should be perpendicular to this angle
 VALIDATION:
 Tell them to debug by drawing:
 
+1. Eye center point E(x,y)
+2. Current touch point P(x,y)
+3. Elliptical boundary (x²/a²) + (y²/b²) = 1
+4. Tangent line at pupil position using calculated φ
+5. Line from E to P showing direction
 
-Small dot for E(x,y)
-Line from E to P
-The elliptical boundary
-The perpendicular line at point of tangency
 
 
-
-Ah, now I see the actual pupil shape - let me correct my description:
 
 SHAPES WE'RE DEALING WITH:
 

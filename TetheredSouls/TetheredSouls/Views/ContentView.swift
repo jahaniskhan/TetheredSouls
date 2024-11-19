@@ -17,8 +17,9 @@ struct ContentView: View {
     @State private var isDragging = false
     @State private var blockPosition: CGPoint?
     @State private var eyePosition: CGPoint = .zero
-    @State private var debugEyePosition: CGPoint = .zero
     
+    
+  
     @State private var plantPhase = 0.0
     let plantTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
     
@@ -85,14 +86,10 @@ struct ContentView: View {
                     GamePanel(
                         score: score,
                         currentStreak: currentStreak,
-                        selectedBlock: selectedBlock,
-                        debugEyePosition: $debugEyePosition
+                        selectedBlock: selectedBlock
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
-                    
-                    GamePanelDebugger(eyePosition: $debugEyePosition)
-                        .padding(.horizontal, 20)
                     
                     GridView(grid: $grid, selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
                         .padding(.horizontal, 20)
