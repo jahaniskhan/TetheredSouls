@@ -36,13 +36,47 @@ struct BlockSelectionView: View {
                                 .gesture(
                                     DragGesture(minimumDistance: 0)
                                         .onChanged { value in
-                                            if selectedBlock == nil {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                    selectedBlock = block
-                                                    isDragging = true
-                                                    blockPosition = value.location
-                                                }
+                                            let parentLocation = value.location
+                                            let globalLocation = value.startLocation
+                                            
+                                            if selectedBlock?.id != block.id {
+                                                selectedBlock = block
+                                                isDragging = true
+                                                blockPosition = CGPoint(
+                                                    x: globalLocation.x,
+                                                    y: globalLocation.y
+                                                )
+                                            } else {
+                                                blockPosition = parentLocation
                                             }
+                                            NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+                                        }
+                                        .onEnded { _ in
+                                            isDragging = false
+                                            blockPosition = nil
+                                        }
+                                )
+                                .highPriorityGesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            let parentLocation = value.location
+                                            let globalLocation = value.startLocation
+                                            
+                                            if selectedBlock?.id != block.id {
+                                                selectedBlock = block
+                                                isDragging = true
+                                                blockPosition = CGPoint(
+                                                    x: globalLocation.x,
+                                                    y: globalLocation.y
+                                                )
+                                            } else {
+                                                blockPosition = parentLocation
+                                            }
+                                            NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+                                        }
+                                        .onEnded { _ in
+                                            isDragging = false
+                                            blockPosition = nil
                                         }
                                 )
                         }

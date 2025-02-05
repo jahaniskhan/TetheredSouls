@@ -6,95 +6,84 @@ struct DraggableBlock: View {
     @Binding var position: CGPoint?
     @Binding var isDragging: Bool
     @Binding var grid: [[Bool]]
-    @GestureState private var dragOffset: CGSize = .zero
+    @State private var dragOffset: CGSize = .zero
     @State private var isValidPlacement = true
     @State private var gridPosition: CGPoint = .zero
     @State private var scale: CGFloat = 1.0
     
-    private let gridSize: CGFloat = 30
     private let gridColumns: Int = 10
     private let gridRows: Int = 10
     
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                // Ghost preview at grid position
-                if isValidPlacement {
-                    BlockPreview(block: block, isSelected: true)
-                        .opacity(0.4)
-                        .frame(width: 80, height: 80)
-                        .foregroundColor(block.color.color)
-                        .position(gridPosition)
-                        .animation(.interactiveSpring(), value: gridPosition)
-                }
-                
-                // Draggable sticker
-                BlockPreview(block: block, isSelected: true)
-                    .frame(width: 80, height: 80)
-                    .position(position ?? .zero)
-                    .offset(dragOffset)
-                    .scaleEffect(scale)
-                    .rotation3DEffect(.degrees(isDragging ? 4 : 0), axis: (x: 1, y: 0, z: 0))
-                    .shadow(color: block.color.color.opacity(0.3), radius: isDragging ? 15 : 5)
-                    .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.8), value: isDragging)
-            }
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($dragOffset) { value, state, _ in
-                        state = value.translation
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            scale = 1.1
-                        }
-                    }
-                    .onChanged { value in
-                        let newPos = CGPoint(
-                            x: (position?.x ?? 0) + value.translation.width,
-                            y: (position?.y ?? 0) + value.translation.height
-                        )
-                        withAnimation(.interactiveSpring()) {
-                            position = newPos
-                            gridPosition = snapToGrid(newPos)
-                            isValidPlacement = checkValidPlacement(at: gridPosition, in: geometry)
-                        }
-                    }
-                    .onEnded { _ in
-                        let finalPosition = snapToGrid(position ?? .zero)
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            scale = 1.0
-                            position = finalPosition
-                            gridPosition = finalPosition
-                        }
-                        position = finalPosition
-                        if isValidPlacement {
-                            placeBlockInGrid(at: gridPosition)
-                            isDragging = false
-                        }
-                    }
+            let cellSize = min(
+                geometry.size.width / CGFloat(gridColumns),
+                geometry.size.height / CGFloat(gridRows)
             )
+            
+            ZStack {
+                // Persistent ghost preview
+                BlockPreview(block: block, isSelected: false)
+                    .opacity(isValidPlacement ? 0.4 : 0.2)
+                    .frame(
+                        width: cellSize * CGFloat(block.shape[0].count),
+                        height: cellSize * CGFloat(block.shape.count)
+                    )
+                    .position(gridPosition)
+                    .animation(.spring(), value: gridPosition)
+                
+                // Draggable element
+                BlockPreview(block: block, isSelected: false)
+                    .frame(
+                        width: cellSize * CGFloat(block.shape[0].count),
+                        height: cellSize * CGFloat(block.shape.count)
+                    )
+                    .offset(dragOffset)
+                    .scaleEffect(isDragging ? 1.1 : 1.0)
+                    .shadow(color: .black.opacity(isDragging ? 0.2 : 0), radius: 8, y: 4)
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onChanged { value in
+                                dragOffset = value.translation
+                                isDragging = true
+                                
+                                let rawPosition = value.location
+                                let cellX = (rawPosition.x / cellSize).rounded(.down)
+                                let cellY = (rawPosition.y / cellSize).rounded(.down)
+                                gridPosition = CGPoint(
+                                    x: cellX * cellSize + (CGFloat(block.shape[0].count)/2 * cellSize),
+                                    y: cellY * cellSize + (CGFloat(block.shape.count)/2 * cellSize)
+                                )
+                                
+                                isValidPlacement = canPlaceBlock(at: Int(cellY), column: Int(cellX))
+                            }
+                            .onEnded { _ in
+                                if isValidPlacement {
+                                    placeBlock(at: Int(gridPosition.y / cellSize), 
+                                             column: Int(gridPosition.x / cellSize))
+                                }
+                                
+                                withAnimation {
+                                    dragOffset = .zero
+                                    isDragging = false
+                                }
+                                
+                                NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+                            }
+                    )
+            }
+            .frame(width: cellSize * CGFloat(gridColumns), 
+                   height: cellSize * CGFloat(gridRows))
         }
     }
     
-    private func snapToGrid(_ point: CGPoint) -> CGPoint {
-        CGPoint(
-            x: round(point.x / gridSize) * gridSize,
-            y: round(point.y / gridSize) * gridSize
-        )
-    }
-    
-    private func checkValidPlacement(at point: CGPoint, in geometry: GeometryProxy) -> Bool {
-        let bounds = geometry.frame(in: .local)
-        guard bounds.contains(point) else { return false }
-        
-        // Convert position to grid coordinates
-        let gridX = Int((point.x / gridSize).rounded())
-        let gridY = Int((point.y / gridSize).rounded())
-        
+    private func canPlaceBlock(at row: Int, column: Int) -> Bool {
         // Check if block would fit within grid bounds and not overlap
-        for (rowIndex, row) in block.shape.enumerated() {
-            for (colIndex, cell) in row.enumerated() {
+        for (rowIndex, gridRow) in block.shape.enumerated() {
+            for (colIndex, cell) in gridRow.enumerated() {
                 if cell {
-                    let newRow = gridY + rowIndex
-                    let newCol = gridX + colIndex
+                    let newRow = row + rowIndex
+                    let newCol = column + colIndex
                     
                     // Check grid boundaries
                     if newRow < 0 || newRow >= gridRows || 
@@ -109,20 +98,16 @@ struct DraggableBlock: View {
                 }
             }
         }
-        
         return true
     }
     
-    private func placeBlockInGrid(at point: CGPoint) {
-        let gridX = Int((point.x / gridSize).rounded())
-        let gridY = Int((point.y / gridSize).rounded())
-        
+    private func placeBlock(at row: Int, column: Int) {
         var newGrid = grid
-        for (rowIndex, row) in block.shape.enumerated() {
-            for (colIndex, cell) in row.enumerated() {
+        for (rowIndex, gridRow) in block.shape.enumerated() {
+            for (colIndex, cell) in gridRow.enumerated() {
                 if cell {
-                    let newRow = gridY + rowIndex
-                    let newCol = gridX + colIndex
+                    let newRow = row + rowIndex
+                    let newCol = column + colIndex
                     newGrid[newRow][newCol] = true
                 }
             }

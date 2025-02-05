@@ -8,7 +8,8 @@ struct CellView: View {
     let selectedBlock: Block?
     let isPreview: Bool
     @State private var showHeart = false
-
+    @StateObject private var touchCoordinator = GridTouchCoordinator.shared
+    
     private let colors: [Color] = [
         Theme.primary,
         Theme.secondary,
@@ -17,24 +18,36 @@ struct CellView: View {
     ]
     
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(backgroundColor)
-                .overlay(
-                    Rectangle()
-                        .stroke(Theme.stroke, lineWidth: 1)
-                )
-                .onTapGesture {
-                    if !isOccupied && selectedBlock == nil {
-                        showHeart = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                            showHeart = false
+        GeometryReader { geo in
+            ZStack {
+                Rectangle()
+                    .fill(backgroundColor)
+                    .overlay(
+                        Rectangle()
+                            .stroke(Theme.stroke, lineWidth: 1)
+                    )
+                    .onTapGesture {
+                        if !isOccupied && selectedBlock == nil {
+                            showHeart = true
+                            
+                            // Convert cell center to grid coordinates
+                            let cellCenter = CGPoint(
+                                x: geo.frame(in: .global).midX,
+                                y: geo.frame(in: .global).midY
+                            )
+                            
+                            touchCoordinator.touchLocation = cellCenter
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                                showHeart = false
+                                touchCoordinator.touchLocation = nil
+                            }
                         }
                     }
+                
+                if showHeart {
+                    HeartParticle(color: colors.randomElement() ?? Theme.primary)
                 }
-            
-            if showHeart {
-                HeartParticle(color: colors.randomElement() ?? Theme.primary)
             }
         }
     }

@@ -5,10 +5,12 @@ struct Block: Identifiable {
     let shape: [[Bool]]
     let color: BlockColor
     let rotationStates: [[[Bool]]]
+    let symbol: String
     
-    init(shape: [[Bool]], color: BlockColor) {
+    init(shape: [[Bool]], color: BlockColor, symbol: String) {
         self.shape = shape
         self.color = color
+        self.symbol = symbol
         self.rotationStates = Block.generateRotations(shape)
     }
     
@@ -41,65 +43,65 @@ struct Block: Identifiable {
     
     static let blocks: [Block] = [
         // 1x1 Single
-        Block(shape: [[true]], color: .softCoral),
+        Block(shape: [[true]], color: .softCoral, symbol: "■"),
         
         // 2x2 Square
         Block(shape: [
             [true, true],
             [true, true]
-        ], color: .mutedPink),
+        ], color: .mutedPink, symbol: "■"),
         
         // 1x3 Line
-        Block(shape: [[true, true, true]], color: .warmBeige),
+        Block(shape: [[true, true, true]], color: .warmBeige, symbol: "■"),
         
         // 2x2 L-shape
         Block(shape: [
             [true, false],
             [true, true]
-        ], color: .dustyRose),
+        ], color: .dustyRose, symbol: "■"),
         
         // 3x3 Cross
         Block(shape: [
             [false, true, false],
             [true, true, true],
             [false, true, false]
-        ], color: .sageGreen),
+        ], color: .sageGreen, symbol: "■"),
         
         // 3x3 L-shape
         Block(shape: [
             [true, false, false],
             [true, false, false],
             [true, true, true]
-        ], color: .paleYellow),
+        ], color: .paleYellow, symbol: "■"),
         
         // 3x2 T-shape
         Block(shape: [
             [true, true, true],
             [false, true, false]
-        ], color: .lightGray),
+        ], color: .lightGray, symbol: "■"),
         
         // 3x2 Zigzag
         Block(shape: [
             [true, true, false],
             [false, true, true]
-        ], color: .softCoral),
+        ], color: .softCoral, symbol: "■"),
         
         // 1x4 Line
-        Block(shape: [[true, true, true, true]], color: .mutedPink),
+        Block(shape: [[true, true, true, true]], color: .mutedPink, symbol: "■"),
         
         // 3x3 Square
         Block(shape: [
             [true, true, true],
             [true, true, true],
             [true, true, true]
-        ], color: .dustyRose),
+        ], color: .dustyRose, symbol: "■"),
         
         // 3x3 Corner
         Block(shape: [
             [true, true, true],
             [true, false, false],
             [true, false, false]
-        ], color: .mutedPink)
+        ], color: .mutedPink, symbol: "■")
     ]
 }
 

@@ -32,7 +32,7 @@ struct DoodleElement: View {
         ]
         
         // Let the color intensity grow with the streak
-        let streakIntensity = Double(min(streak, 10)) * 0.08 + 0.4
+        let streakIntensity = Double(min(streak, 10)) * 0.1 + 0.6
         self.color = colors[Int.random(in: 0..<colors.count)]
             .opacity(streakIntensity)
     }

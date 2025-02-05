@@ -1,154 +1,135 @@
+//
+//  EyeGeometry.swift
+//  TetheredSouls
+//
+//  Created by Jahan Khan on 11/9/24
+//  BRAND NEW
+//
+
 import SwiftUI
+import Foundation
 
 struct EyeGeometry {
     // MARK: - Configuration
     struct Configuration {
-        // MARK: - Layout
-        static let baseSize: CGFloat = 100.0
-        // Adjust these based on your 'balls.png' image
-        static let leftEyeCenter = CGPoint(x: 0.35, y: 0.5)  
+        // The fractions for each eye's center:
+        static let leftEyeCenter  = CGPoint(x: 0.35, y: 0.5)
         static let rightEyeCenter = CGPoint(x: 0.65, y: 0.5)
-        static let boundaryA: CGFloat = 9.2  // Semi-major axis
-        static let boundaryB: CGFloat = 6.7  // Semi-minor axis
 
-        // MARK: - Performance
-        static let scaleNormalization: CGFloat = 150.0//60.0
-        static let centerThreshold: CGFloat = 0.001
+        // Ellipse half-width/half-height
+        static let boundaryA: CGFloat = 12.0
+        static let boundaryB: CGFloat = 8.0
     }
 
-    // MARK: - Types
+    enum EyeRole {
+        case master
+        case slave
+    }
+
+    // MARK: - Pupil State
     struct PupilState: Equatable {
-        let offset: CGPoint
-        let angle: Double
-        let rotation: Double
-
-        var debugDescription: String {
-            """
-            Offset: (x: \(String(format: "%.2f", offset.x)), y: \(String(format: "%.2f", offset.y)))
-            Angle: \(String(format: "%.2f", angle * 180 / .pi))°
-            Rotation: \(String(format: "%.2f", rotation * 180 / .pi))°
-            """
-        }
-
-        static func == (lhs: PupilState, rhs: PupilState) -> Bool {
-            lhs.offset == rhs.offset &&
-            lhs.angle == rhs.angle &&
-            lhs.rotation == rhs.rotation
-        }
+        let offset: CGPoint    // offset from the eye center
+        let angle: Double      // the angle used for positioning
+        let rotation: Double   // tangent-based orientation
     }
 
     // MARK: - Properties
+    let role: EyeRole
     let center: CGPoint
     let boundaryA: CGFloat
     let boundaryB: CGFloat
 
-    // MARK: - Initialization
-    init(center: CGPoint, boundaryA: CGFloat, boundaryB: CGFloat) {
-        self.center = center
+    init(role: EyeRole, center: CGPoint, boundaryA: CGFloat, boundaryB: CGFloat) {
+        self.role      = role
+        self.center    = center
         self.boundaryA = boundaryA
         self.boundaryB = boundaryB
     }
 
-    func initialPupilState() -> PupilState {
-        // Set the initial offset at the covertex (0, boundaryB)
-        let offset = CGPoint(x: 0, y: boundaryB)
-        let tangentAngle = calculateTangentAngle(offset: offset) ?? 0
-        return PupilState(offset: offset, angle: 0, rotation: tangentAngle)
-    }
-
-    // MARK: - Public Methods
-    func calculatePupilPosition(for touchPoint: CGPoint) -> PupilState {
-        // Removed center point check since we want pupils to always be on ellipse boundary
-        // Removed distance check since we want pupils to always be on ellipse boundary
-        // Removed scale factor since we want pupils to always be on full ellipse boundary
+    // MARK: - Build a pupil state pinned to ellipse boundary
+    func pupilState(at angle: Double) -> PupilState {
+        // Normalize angle to [-π, π]
+        var normalizedAngle = angle
+        while normalizedAngle > .pi { normalizedAngle -= 2 * .pi }
+        while normalizedAngle < -.pi { normalizedAngle += 2 * .pi }
         
-        let (deltaX, deltaY) = calculateDeltas(from: touchPoint)
-        let theta = atan2(deltaY, deltaX)
+        // Get exact point on ellipse boundary
+        let px = boundaryA * cos(normalizedAngle)
+        let py = boundaryB * sin(normalizedAngle)
+        let offset = CGPoint(x: px, y: py)
         
-        // Calculate the offset on the ellipse boundary
-        let constrainedX = boundaryA * cos(theta)
-        let constrainedY = boundaryB * sin(theta)
-        let offset = CGPoint(x: constrainedX, y: constrainedY)
-        
-        // Calculate the tangent angle at the constrained position
-        let tangentAngle = calculateTangentAngle(offset: offset) ?? 0
+        // Get tangent angle (derivative of ellipse)
+        // dx/dt = -a*sin(t), dy/dt = b*cos(t)
+        let dx = -boundaryA * sin(normalizedAngle)
+        let dy = boundaryB * cos(normalizedAngle)
+        let tangentAngle = atan2(dy, dx)
         
         return PupilState(
             offset: offset,
-            angle: theta,
-            rotation: tangentAngle
+            angle: normalizedAngle,
+            rotation: tangentAngle + .pi  // Point inward
         )
     }
-
-    // MARK: - Private Methods
-    private func isCenterPoint(_ point: CGPoint) -> Bool {
-        abs(point.x - center.x) < Configuration.centerThreshold && abs(point.y - center.y) < Configuration.centerThreshold
-    }
-
-    private func calculateDeltas(from point: CGPoint) -> (x: CGFloat, y: CGFloat) {
-        (point.x - center.x, point.y - center.y)
-    }
-
-    private func calculateDistance(deltaX: CGFloat, deltaY: CGFloat) -> CGFloat {
-        sqrt(deltaX * deltaX + deltaY * deltaY)
-    }
-
-    private func calculateConstrainedOffset(theta: Double, scale: CGFloat) -> (x: CGFloat, y: CGFloat) {
-        // Reduce the movement range to keep pupils more within bounds
-        let x = boundaryA * cos(theta) * scale //* 0.8
-        let y = boundaryB * sin(theta) * scale //* 0.8
-        return (x, y)
-    }
-
-    // MARK: - Tangent Angle Calculation
-    func calculateTangentAngle(offset: CGPoint) -> Double? {
+    
+    // MARK: - Helper Methods
+    func isOffsetWithinEllipse(_ offset: CGPoint) -> Bool {
+        // eq. value = x²/a² + y²/b² <= 1
         let x = offset.x
         let y = offset.y
-        let a = boundaryA
-        let b = boundaryB
+        let eqVal = (x*x)/(boundaryA*boundaryA) + (y*y)/(boundaryB*boundaryB)
+        return eqVal <= 1.0
+    }
 
-        // Avoid division by zero
-        guard y != 0 else {
-            return x >= 0 ? -.pi / 2 : .pi / 2
+    static func calculateFrameNumber(
+        touchPoint: CGPoint,
+        eyeCenter: CGPoint,
+        totalFrames: Int,
+        defaultFrame: Int = 13
+    ) -> Int {
+        #if DEBUG
+        print("=== Eye Tracking Debug ===")
+        print("Touch point: \(touchPoint)")
+        print("Eye center: \(eyeCenter)")
+        #endif
+        
+        // Convert touch to relative coordinates from eye center
+        let dx = touchPoint.x - eyeCenter.x
+        let dy = touchPoint.y - eyeCenter.y
+        
+        // Calculate angle from eye center to touch point
+        var angle = atan2(dy, dx)
+        
+        // Normalize angle to 0-2π range, starting from 12 o'clock position
+        // Adjust to make 0 at 12 o'clock and positive clockwise
+        angle = -angle + .pi/2
+        if angle < 0 {
+            angle += 2 * .pi
         }
-
-        let numerator = -b * b * x
-        let denominator = a * a * y
-
-        var tangentAngle = atan2(numerator, denominator)
-
-        // Limit the rotation to a reasonable range, e.g., between -45° and +45°
-        let maxRotation = (.pi / 4)  // 45 degrees in radians
-        tangentAngle = max(min(tangentAngle, maxRotation), -maxRotation)
-
-        return tangentAngle
+        
+        // Map angle to frame number (0-24)
+        // Adjust the mapping to ensure full range of motion
+        let frameNumber = Int((angle / (2 * .pi)) * Double(totalFrames))
+        
+        // Ensure we can reach all frames (0-24)
+        let clampedFrame = min(max(frameNumber, 0), totalFrames - 1)
+        
+        #if DEBUG
+        print("Original angle (radians): \(angle)")
+        print("Raw frame number: \(frameNumber)")
+        print("Final frame: \(clampedFrame)")
+        print("=====================")
+        #endif
+        
+        return clampedFrame
     }
-
-    // MARK: - Ellipse Boundary Check
-    func isOffsetWithinEllipse(offset: CGPoint) -> Bool {
-        let x = offset.x
-        let y = offset.y
-        let a = boundaryA
-        let b = boundaryB
-        let value = (x * x) / (a * a) + (y * y) / (b * b)
-        return value <= 1.0
-    }
-}
-
-// MARK: - Debug Helpers
-#if DEBUG
-extension EyeGeometry {
-    func debugPrint(state: PupilState) {
-        print("""
-        🔍 EyeGeometry Debug:
-        Center: \(formatPoint(center))
-        Boundaries: (A: \(boundaryA), B: \(boundaryB))
-        State: \(state.debugDescription)
-        """)
-    }
-
-    private func formatPoint(_ point: CGPoint) -> String {
-        String(format: "(%.2f, %.2f)", point.x, point.y)
+    
+    static func debugTouchInfo(location: CGPoint?, parentSize: CGSize) {
+        guard let touch = location else { return }
+        #if DEBUG
+        print("=== Touch Debug ===")
+        print("Raw touch location: \(touch)")
+        print("Parent size: \(parentSize)")
+        print("==================")
+        #endif
     }
 }
-#endif

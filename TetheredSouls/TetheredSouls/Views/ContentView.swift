@@ -20,8 +20,60 @@ struct ContentView: View {
     
     
   
-    @State private var plantPhase = 0.0
+    @State private var plantPhase: Double = 0
     let plantTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    
+    @State private var autoStreak = true
+    @State private var streakTimer: Timer? = nil
+    
+    private func startAutoStreak() {
+        streakTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            if currentStreak < 3000 {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentStreak += 1
+                    score += 500
+                }
+            }
+        }
+    }
+    
+    private var backgroundDoodles: some View {
+        GeometryReader { geometry in
+            ZStack {
+                if currentStreak > 0 {
+                    ForEach(0..<min(currentStreak * 3, 36), id: \.self) { i in
+                        let types: [DoodleType] = {
+                            if currentStreak > 15 {
+                                return [.star, .heart, .semicolon, .moon, .swirl, .xSmile]
+                            } else if currentStreak > 8 {
+                                return [.star, .heart, .moon, .swirl]
+                            } else {
+                                return [.star, .heart]
+                            }
+                        }()
+                        
+                        DoodleElement(
+                            type: types.randomElement() ?? .star,
+                            rotation: Double.random(in: -25...25),
+                            streak: currentStreak
+                        )
+                            .opacity(0.15)
+                            .scaleEffect(0.5)
+                            .offset(y: -20 * sin(plantPhase + Double(i)))
+                            .position(
+                                x: CGFloat.random(in: 50...geometry.size.width-50),
+                                y: CGFloat.random(in: 100...geometry.size.height-100)
+                            )
+                    }
+                }
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 2).repeatForever()) {
+                    plantPhase += .pi * 2
+                }
+            }
+        }
+    }
     
     var decorativeElements: some View {
         ZStack {
@@ -43,11 +95,14 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            Color(hex: "FFF9F2")
+                .ignoresSafeArea()
+            
+            // Add background doodles behind main content
+            backgroundDoodles
+            
             // Main game content
             ZStack {
-                Color(hex: "FFF9F2")
-                    .ignoresSafeArea()
-                
                 // Background doodles tied to streak
                 GeometryReader { geometry in
                     if currentStreak > 0 {
@@ -70,11 +125,9 @@ struct ContentView: View {
                             .frame(width: CGFloat.random(in: 25...45))
                             .position(
                                 x: CGFloat.random(in: 0...geometry.size.width),
-                                y: CGFloat.random(in: 
-                                    geometry.size.height * 0.15...geometry.size.height * 0.95
-                                )
+                                y: CGFloat.random(in: geometry.size.height * 0.15...geometry.size.height * 0.95)
                             )
-                            .opacity(Double.random(in: 0.5...0.9))
+                            .opacity(Double.random(in: 0.6...1.0))
                             .animation(.easeInOut(duration: 0.5), value: currentStreak)
                         }
                     }
@@ -122,6 +175,14 @@ struct ContentView: View {
             }
         }
         .coordinateSpace(name: "gameArea")
+        .onAppear {
+            if autoStreak {
+                startAutoStreak()
+            }
+        }
+        .onDisappear {
+            streakTimer?.invalidate()
+        }
     }
 }
 

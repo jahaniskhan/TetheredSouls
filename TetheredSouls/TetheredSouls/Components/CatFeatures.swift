@@ -1,21 +1,18 @@
+//
+//  CatFeatures.swift
+//  TetheredSouls
+//
+//  Created by Jahan Khan on 11/9/24
+//  BRAND NEW
+//
+
 import SwiftUI
 
 // MARK: - Supporting Types
-
-// Define CatMood if not already defined
-enum CatMood {
-    case normal
-    case happy
-    case sad
-    case sleepy
-    case watching
-}
-
-// Define LineShape for drawing debug lines (if used)
 struct LineShape: Shape {
     let angle: Double
     let length: CGFloat
-
+    
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let dx = cos(angle) * length / 2
@@ -26,202 +23,274 @@ struct LineShape: Shape {
     }
 }
 
+enum CatMood {
+    case normal, happy, sad, sleepy, watching
+}
+
 struct CatFeatures: View {
-    let phase: Double
-    let isWatching: Bool
+    // MARK: - Properties
+    @Binding var orbitAngle: Double
     let mood: CatMood
     let touchLocation: CGPoint?
-    var onDebugUpdate: ((EyeGeometry.PupilState, EyeGeometry.PupilState) -> Void)?
-
+    let parentSize: CGSize
+    let isSleeping: Bool
+    let isBlinking: Bool
+    private let totalFrames = 25
+    
+    // Animation states
+    @State private var currentFrame: Int = 13
+    @State private var showSleepingZ = false
+    @State private var breathingScale: CGFloat = 1.0
+    @State private var zOffset: CGFloat = 0
+    @State private var sleepyMouthOffset: CGFloat = 0
+    @State private var sleepyWhiskerRotation: Double = 0
+    
+    // MARK: - Helper Methods
+    private func calculateFrameNumber(eyeCenter: CGPoint) -> Int {
+        if isBlinking { return 13 }
+        
+        if let touch = touchLocation {
+            NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+            return EyeGeometry.calculateFrameNumber(
+                touchPoint: touch,
+                eyeCenter: eyeCenter,
+                totalFrames: totalFrames,
+                defaultFrame: 13
+            )
+        }
+        return 13
+    }
+    
     var body: some View {
-        GeometryReader { geometry in
-            let size = min(geometry.size.width, geometry.size.height)
-
-            // Eye centers
-            let leftEyeCenter = CGPoint(
-                x: size * EyeGeometry.Configuration.leftEyeCenter.x,
-                y: size * EyeGeometry.Configuration.leftEyeCenter.y
-            )
-            let rightEyeCenter = CGPoint(
-                x: size * EyeGeometry.Configuration.rightEyeCenter.x,
-                y: size * EyeGeometry.Configuration.rightEyeCenter.y
-            )
-
-            // Eye geometries
-            let leftEyeGeometry = EyeGeometry(
-                center: leftEyeCenter,
-                boundaryA: EyeGeometry.Configuration.boundaryA,
-                boundaryB: EyeGeometry.Configuration.boundaryB
-            )
-            let rightEyeGeometry = EyeGeometry(
-                center: rightEyeCenter,
-                boundaryA: EyeGeometry.Configuration.boundaryA,
-                boundaryB: EyeGeometry.Configuration.boundaryB
-            )
-
-            // Pupil states
-            let leftPupilState: EyeGeometry.PupilState
-            let rightPupilState: EyeGeometry.PupilState
-
-            if let touchLocation = touchLocation {
-                leftPupilState = leftEyeGeometry.calculatePupilPosition(for: touchLocation)
-                rightPupilState = rightEyeGeometry.calculatePupilPosition(for: touchLocation)
-            } else {
-                leftPupilState = leftEyeGeometry.initialPupilState()
-                rightPupilState = rightEyeGeometry.initialPupilState()
-            }
-
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            let leftEyeCenter = CGPoint(x: size * 0.35, y: size * 0.5)
+            let targetFrame = calculateFrameNumber(eyeCenter: leftEyeCenter)
+            
             ZStack {
-                // Cat Ears
-                Image("EarHump")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size * 0.9)
-                    .position(x: size / 2, y: size * 0.3)
-                    .accessibilityIdentifier("catEars")
 
-                // Eyeballs (Eye Whites)
-                Image("balls")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size)
-                    .position(x: size / 2, y: size / 2)
-                    .accessibilityIdentifier("eyeWhites")
-
-                // Pupils and Debug Views
+                // Cat ears band with stripes
                 ZStack {
-                    // Pupils
-                    PupilView(
-                        state: leftPupilState,
-                        position: CGPoint(x: leftEyeCenter.x + 3.5, y: leftEyeCenter.y),
-                        size: size
-                    )
-
-                    PupilView(
-                        state: rightPupilState,
-                        position: CGPoint(x: rightEyeCenter.x + 4.9, y: rightEyeCenter.y + (-2.5)),
-                        size: size
-                    )
-
-                    // Debug Views
-                    #if DEBUG
-                    EyeBoundaryDebug(
-                        size: size,
-                        leftEyeCenter: leftEyeCenter,
-                        rightEyeCenter: rightEyeCenter,
-                        leftPupilState: leftPupilState,
-                        rightPupilState: rightPupilState
-                    )
-                    #endif
+                    Image("catband")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.75)
+                    
+                    // Head stripes between the ears
+                    Image("headstripes")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.25)
+                        .offset(y: -size * 0.05)
                 }
-                .onAppear {
-                    onDebugUpdate?(leftPupilState, rightPupilState)
-                }
-                .onChange(of: touchLocation) { _ in
-                    onDebugUpdate?(leftPupilState, rightPupilState)
+                .position(x: size * 0.5, y: size * 0.25)
+                
+                // Remove side stripes section
+                // Group {
+                //     // Left side stripes
+                //     Image("greystripes")...
+                //     // Right side stripes
+                //     Image("greystripes")...
+                // }
+
+                // Only show eyes if not sleeping
+                if !isSleeping {
+                    // Iris backgrounds
+                    Group {
+                        Ellipse()
+                            .fill(Color(red: 0.6, green: 0.65, blue: 0.4).opacity(0.95))
+                            .frame(width: size * 0.14, height: size * 0.14)
+                            .position(x: size * 0.37, y: size * 0.45)
+                            .opacity(isBlinking ? 0 : 1)
+                        
+                        Ellipse()
+                            .fill(Color(red: 0.6, green: 0.65, blue: 0.4).opacity(0.95))
+                            .frame(width: size * 0.14, height: size * 0.14)
+                            .position(x: size * 0.65, y: size * 0.45)
+                            .opacity(isBlinking ? 0 : 1)
+                    }
+
+                    // Eyeballs
+                    Image("balls")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.95)
+                        .position(x: size/2, y: size * 0.45)
+                        .opacity(isBlinking ? 0 : 1)
+                    
+                    // Closed eyes - centered but higher
+                    Image("closedclosedeyes")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.95)
+                        .position(x: size * 0.39, y: size * 0.40)
+                        .opacity(isBlinking ? 1 : 0)
+                    
+                    // Regular eye animations (pupils)
+                    Group {
+                        Image("\(currentFrame)")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: size * 0.2)
+                            .position(x: size * 0.35, y: size * 0.45)
+                            .opacity(isBlinking ? 0 : 1)
+                        
+                        Image("\(currentFrame)")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: size * 0.2)
+                            .position(x: size * 0.65, y: size * 0.45)
+                            .opacity(isBlinking ? 0 : 1)
+                    }
+                } else {
+                    // Sleeping eyes (permanently closed)
+                    Image("closedclosedeyes")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.95)
+                        .position(x: size * 0.39, y: size * 0.40)
                 }
 
-                // Mouth and Whiskers
-                MouthAndWhiskers(mood: mood, size: size)
+                // Sleeping Z's with enhanced positioning
+                if isSleeping {
+                    // Enhanced sleeping mouth with side-to-side movement
+                    Image("justMouth")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.8)
+                        .position(x: size/2 + sleepyMouthOffset, y: size * 0.55)
+                        .scaleEffect(breathingScale)
+                        .onAppear {
+                            // Combine breathing and side movement
+                            withAnimation(
+                                .easeInOut(duration: 3)
+                                .repeatForever(autoreverses: true)
+                            ) {
+                                breathingScale = 1.3
+                                sleepyMouthOffset = 5
+                            }
+                        }
+                    
+                    // Keep whiskers while sleeping with more twitchy movement
+                    Image("Whiskers")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 1.1)
+                        .position(x: size * 0.5, y: size * 0.5)
+                        .rotationEffect(.degrees(sleepyWhiskerRotation))
+                        .onAppear {
+                            // More frequent, random whisker twitches
+                            Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    sleepyWhiskerRotation = Double.random(in: -3...3)
+                                }
+                            }
+                        }
+                    
+                    // Enhanced Z's animation
+                    SleepingZs()
+                        .position(x: size * 0.7, y: size * 0.3)
+                        .scaleEffect(1.2) // Made larger
+                } else {
+                    MouthAndWhiskers(mood: mood, size: size, isBlinking: isBlinking)
+                }
+            }
+            .onChange(of: targetFrame) { _, newValue in
+                animateToFrame(newValue)
             }
         }
     }
-
-    // MARK: - Supporting Views
-
-    private struct PupilView: View {
-        let state: EyeGeometry.PupilState
-        let position: CGPoint
-        let size: CGFloat
-
-        var body: some View {
-            let scalingFactor = size / EyeGeometry.Configuration.baseSize
-
-            Image("Pupil")
-                .resizable()
-                .scaledToFit()
-                .frame(width: size * 0.1)  // Adjust the multiplier as needed
-                .position(
-                    x: position.x + state.offset.x * scalingFactor,
-                    y: position.y + state.offset.y * scalingFactor
-                )
-                .rotationEffect(.radians(-state.rotation + .pi / 2))
-                .accessibilityIdentifier("pupil")
+    
+    // Faster eye movement animation
+    private func animateToFrame(_ targetFrame: Int) {
+        let frameDiff = targetFrame - currentFrame
+        let duration = 0.2 // Reduced from 0.3
+        let steps = 3 // Reduced from 5
+        
+        for i in 1...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration * Double(i) / Double(steps)) {
+                withAnimation(.easeInOut(duration: duration / Double(steps))) {
+                    currentFrame = currentFrame + (frameDiff / steps)
+                }
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            withAnimation(.easeOut(duration: duration / Double(steps))) {
+                currentFrame = targetFrame
+            }
         }
     }
-
+    
+    // MARK: - Mouth & Whiskers
     private struct MouthAndWhiskers: View {
         let mood: CatMood
         let size: CGFloat
+        let isBlinking: Bool
+        @State private var whiskerRotation: Double = 0
 
         var body: some View {
-            Group {
+            ZStack {
                 Image("Whiskers")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: size * 0.9)
-                    .accessibilityIdentifier("whiskers")
+                    .frame(width: size * 1.1)
+                    .position(x: size * 0.5, y: size * 0.5)
+                    .rotationEffect(.degrees(whiskerRotation))
+                    .onChange(of: isBlinking) { _, newValue in
+                        if newValue {
+                            withAnimation(.easeInOut(duration: 0.1)) {
+                                whiskerRotation = 2
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation(.easeInOut(duration: 0.1)) {
+                                    whiskerRotation = 0
+                                }
+                            }
+                        }
+                    }
 
-                Image(getMouthAsset())
+                Image("SleepyMouth")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: size * 0.35)
-                    .accessibilityIdentifier("mouth")
-            }
-            .position(x: size * 0.5, y: size * 0.7)
-        }
-
-        private func getMouthAsset() -> String {
-            switch mood {
-            case .sleepy:
-                return "SleepyMouth"
-            case .happy:
-                return "justMouth"
-            default:
-                return "ClosedMouth"
+                    .frame(width: size * 0.2)
+                    .position(x: size * 0.52, y: size * 0.6)
             }
         }
     }
+}
 
-    private struct EyeBoundaryDebug: View {
-        let size: CGFloat
-        let leftEyeCenter: CGPoint
-        let rightEyeCenter: CGPoint
-        let leftPupilState: EyeGeometry.PupilState
-        let rightPupilState: EyeGeometry.PupilState
-
-        var body: some View {
-            // Ellipse dimensions based on boundaries
-            let ellipseWidth = EyeGeometry.Configuration.boundaryA * 2
-            let ellipseHeight = EyeGeometry.Configuration.boundaryB * 2
-
-            Group {
-                // Blue oval boundaries
-                Ellipse()
-                    .stroke(Color.blue.opacity(0.5), lineWidth: 1)
-                    .frame(width: ellipseWidth, height: ellipseHeight)
-                    .position(leftEyeCenter)
-
-                Ellipse()
-                    .stroke(Color.blue.opacity(0.5), lineWidth: 1)
-                    .frame(width: ellipseWidth, height: ellipseHeight)
-                    .position(rightEyeCenter)
-
-                // Left Eye Tangent Line
-                LineShape(angle: leftPupilState.rotation, length: 20)
-                    .stroke(Color.green, lineWidth: 1)
-                    .position(
-                        x: leftEyeCenter.x + leftPupilState.offset.x,
-                        y: leftEyeCenter.y + leftPupilState.offset.y
+// Enhanced SleepingZs animation
+struct SleepingZs: View {
+    @State private var offset: CGFloat = 0
+    @State private var opacity: Double = 0
+    
+    var body: some View {
+        HStack(spacing: 8) { // Increased spacing
+            ForEach(0..<3) { index in
+                Text("Z")
+                    .font(.system(size: 16 + CGFloat(index) * 4)) // Larger sizes
+                    .fontWeight(.bold) // Made bolder
+                    .foregroundColor(.blue.opacity(0.8)) // More opaque
+                    .offset(y: offset - CGFloat(index) * 15) // More vertical spacing
+                    .opacity(opacity)
+                    .rotationEffect(.degrees(-15))
+                    .shadow(color: .blue.opacity(0.3), radius: 4) // Added glow
+                    .animation(
+                        .easeInOut(duration: 2)
+                        .repeatForever(autoreverses: true)
+                        .delay(Double(index) * 0.4),
+                        value: offset
                     )
-
-                // Right Eye Tangent Line
-                LineShape(angle: rightPupilState.rotation, length: 20)
-                    .stroke(Color.green, lineWidth: 1)
-                    .position(
-                        x: rightEyeCenter.x + rightPupilState.offset.x,
-                        y: rightEyeCenter.y + rightPupilState.offset.y
-                    )
+            }
+        }
+        .onAppear {
+            withAnimation(
+                .easeInOut(duration: 2)
+                .repeatForever(autoreverses: true)
+            ) {
+                offset -= 30 // Larger movement
+                opacity = 1
             }
         }
     }

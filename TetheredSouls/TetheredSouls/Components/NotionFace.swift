@@ -2,176 +2,285 @@
 //  NotionFace.swift
 //  TetheredSouls
 //
-//  Created by Jahan khan on 11/9/24.
-//MARK: - PARENT OF CATFEATURES
+//  Created by Jahan Khan on 11/9/24
+//  BRAND NEW
+//
 
 import SwiftUI
-import Foundation
-import CoreGraphics
 
 struct NotionFace: View {
     // MARK: - State
     @State private var phase = 0.0
     @State private var isWatching = false
     @State private var mood: CatMood = .normal
-    @State private var eyePosition: CGPoint = .zero
-    @State private var touchLocation: CGPoint?
+    @State private var touchLocation: CGPoint? = nil
+    @State private var orbitAngle: Double = -.pi/2
+    @State private var showHeart = false
+    @State private var breathingScale: CGFloat = 1.0
+    @State private var isBlinking = false
+    @StateObject private var touchCoordinator = GridTouchCoordinator.shared
+    
+    // Idle tracking
+    @State private var lastInteractionTime: Date
+    @State private var isIdle = false
+    @State private var isSleeping = false
+    
+    // Timer for blinking
+    let blinkTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
+    let idleCheckTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
+    // Add new properties for blinking intervals
+    @State private var lastBlinkTime = Date()
+    private let blinkIdleThreshold: TimeInterval = 5.0  // Blink after 5 seconds of no interaction
+    
+    // Add blink counter
+    @State private var blinkCount: Int = 0
+    
+    // Add these new state properties
+    @State private var isWakingUp = false
+    @State private var wakeUpPhase = 0
+    @State private var sleepyMouthOffset: CGFloat = 0
+    @State private var sleepyWhiskerRotation: Double = 0
     
     // MARK: - Configuration
-    struct NotionFaceConfiguration {
-        static let updateInterval: TimeInterval = 0.05
-        static let resetDelay: TimeInterval = 0.5
-        static let sleepChance: Double = 0.01
+    struct Config {
+        static let idleThreshold: TimeInterval = 60 // Changed to 60 seconds
+        static let sleepThreshold: TimeInterval = 20 // Reduced for testing
+        static let breathingDuration: TimeInterval = 3
+        static let orbitSpeed: Double = 0.15
+        static let sleepChance: Double = 1.0  // Always sleep when idle
+        static let breathingScale: CGFloat = 1.05
+        static let blinkDuration: Double = 0.15
+        static let idleBlinkChance: Double = 1.0
+        static let wakeUpDuration: Double = 2.0 // Total wake up animation duration
     }
     
-    // MARK: - Timer
-    let timer = Timer.publish(
-        every: NotionFaceConfiguration.updateInterval,
-        on: .main,
-        in: .common
-    ).autoconnect()
+    init() {
+        _lastInteractionTime = State(initialValue: Date()) // Reset timer on app launch
+        // ... keep other initializations
+    }
     
     var body: some View {
         GeometryReader { geometry in
+            let _ = geometry.size // Explicitly ignore unused size
             let size = min(geometry.size.width, geometry.size.height)
-            
-            // Left Eye Geometry and Pupil State
-            let leftEyeCenter = CGPoint(
-                x: size * EyeGeometry.Configuration.leftEyeCenter.x,
-                y: size * EyeGeometry.Configuration.leftEyeCenter.y
-            )
-            let leftEyeGeometry = EyeGeometry(
-                center: leftEyeCenter,
-                boundaryA: EyeGeometry.Configuration.boundaryA,
-                boundaryB: EyeGeometry.Configuration.boundaryB
-            )
-            let leftPupilState = leftEyeGeometry.calculatePupilPosition(
-                for: CGPoint(
-                    x: leftEyeCenter.x + eyePosition.x,
-                    y: leftEyeCenter.y + eyePosition.y
-                )
-            )
 
-            // Right Eye Geometry and Pupil State
-            let rightEyeCenter = CGPoint(
-                x: size * EyeGeometry.Configuration.rightEyeCenter.x,
-                y: size * EyeGeometry.Configuration.rightEyeCenter.y
-            )
-            let rightEyeGeometry = EyeGeometry(
-                center: rightEyeCenter,
-                boundaryA: EyeGeometry.Configuration.boundaryA,
-                boundaryB: EyeGeometry.Configuration.boundaryB
-            )
-            let rightPupilState = rightEyeGeometry.calculatePupilPosition(
-                for: CGPoint(
-                    x: rightEyeCenter.x + eyePosition.x,
-                    y: rightEyeCenter.y + eyePosition.y
-                )
-            )
-            
             ZStack {
-                // Base circle with grey gradient
+                // Background circle
                 Circle()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(red: 0.82, green: 0.80, blue: 0.78),
-                                Color(red: 0.75, green: 0.72, blue: 0.70)
+                                Color(hex: "9a958f"),
+                                Color(hex: "9a958f")
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
-                    .frame(width: 85, height: 85)  // Reduced from 100
-                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                
-                CatFeatures(
-                    phase: phase,
-                    isWatching: isWatching,
-                    mood: mood,
-                    touchLocation: eyePosition,
-                    onDebugUpdate: { left, right in
-                        CatDebugPrinter.printGeometryState(
-                            leftState: left,
-                            rightState: right,
-                            centerPoint: CGPoint(
-                                x: EyeGeometry.Configuration.baseSize / 2,
-                                y: EyeGeometry.Configuration.baseSize / 2
-                            ),
-                            size: size
-                        )
-                    }
-                )
-                .frame(width: 120, height: 120)
-            }
-            .coordinateSpace(name: "NotionFaceCoordinateSpace")
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        handleInteraction(.watching)
-                        let location = value.location(in: .named("NotionFaceCoordinateSpace"))
-                        touchLocation = location
-                        eyePosition = location
-                    }
-                    .onEnded { _ in
-                        DispatchQueue.main.asyncAfter(
-                            deadline: .now() + NotionFaceConfiguration.resetDelay
-                        ) {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                touchLocation = nil
-                                eyePosition = .zero
+                    .frame(width: 65, height: 65)
+                    .overlay(
+                        ZStack {
+                            // Left side ears (>)
+                            Group {
+                                // Large left ear
+                                Image("InnerEar")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 12)
+                                    .position(x: 15, y: 25)
+                                
+                                // Medium left ear
+                                Image("InnerEar")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 9)
+                                    .position(x: 12, y: 35)
+                                
+                                // Small left ear
+                                Image("InnerEar")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 7)
+                                    .position(x: 10, y: 45)
                             }
-                            resetMood()
+                            
+                            // Right side ears (<) - flipped
+                            Group {
+                                // Large right ear
+                                Image("InnerEar")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 12)
+                                    .scaleEffect(x: -1, y: 1) // Flip horizontally
+                                    .position(x: 50, y: 25)
+                                
+                                // Medium right ear
+                                Image("InnerEar")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 9)
+                                    .scaleEffect(x: -1, y: 1) // Flip horizontally
+                                    .position(x: 53, y: 35)
+                                
+                                // Small right ear
+                                Image("InnerEar")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 7)
+                                    .scaleEffect(x: -1, y: 1) // Flip horizontally
+                                    .position(x: 55, y: 45)
+                            }
                         }
-                    }
-            )
-            .onReceive(timer) { _ in
-                withAnimation(
-                    .linear(duration: NotionFaceConfiguration.updateInterval)
-                ) {
-                    phase += NotionFaceConfiguration.updateInterval
-                    updateMoodBasedOnTime()
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                    .offset(x: -12, y: 25)
+
+                CatFeatures(
+                    orbitAngle: $orbitAngle,
+                    mood: mood,
+                    touchLocation: touchCoordinator.touchLocation.map { point in
+                        // Convert from global to local coordinates
+                        let localPoint = CGPoint(
+                            x: point.x - geometry.frame(in: .global).minX,
+                            y: point.y - geometry.frame(in: .global).minY
+                        )
+                        return localPoint
+                    },
+                    parentSize: geometry.size,
+                    isSleeping: isSleeping,
+                    isBlinking: isBlinking
+                )
+                .frame(width: 90, height: 90)
+                .offset(x: -12, y: 25)
+
+                if showHeart {
+                    HeartParticle(color: .pink)
+                        .position(touchCoordinator.touchLocation ?? .zero)
                 }
             }
-            .accessibilityIdentifier("CatView")
+            .onChange(of: touchCoordinator.touchLocation) { _, _ in
+                if touchCoordinator.touchLocation != nil {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        mood = .watching
+                    }
+                } else {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        mood = .normal
+                    }
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        updateInteraction() // Reset idle timer on heart touch
+                        showHeart = true
+                    }
+                    .onEnded { _ in
+                        showHeart = false
+                    }
+            )
+        }
+        .onAppear {
+            // Check idle state every second
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                checkIdleState()
+            }
+        }
+        .onReceive(blinkTimer) { _ in
+            if !isSleeping {
+                blink()
+            }
+        }
+        .onReceive(idleCheckTimer) { _ in
+            checkIdleState()
+        }
+        .onChange(of: touchCoordinator.touchLocation) { oldValue, newValue in
+            if newValue != nil {
+                lastInteractionTime = Date()
+                lastBlinkTime = Date()  // Reset blink timer on interaction
+                isIdle = false
+                isSleeping = false
+                isBlinking = false // Reset blink state on interaction
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .resetIdleTimer)) { _ in
+            updateInteraction()
         }
     }
     
-    // MARK: - Interaction Methods
-    private func handleInteraction(_ newMood: CatMood) {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            mood = newMood
-            isWatching = true
-        }
-    }
-    
+    // MARK: - Helpers
     private func resetMood() {
         withAnimation(.easeOut(duration: 0.3)) {
             mood = .normal
             isWatching = false
         }
     }
-    
-    private func updateMoodBasedOnTime() {
-        if Double.random(in: 0...1) < NotionFaceConfiguration.sleepChance {
-            handleInteraction(.sleepy)
-        }
-    }
-    
-    private func updateEyePosition(_ location: CGPoint, eyeGeometry: EyeGeometry) {
-        let pupilState = eyeGeometry.calculatePupilPosition(for: location)
-        
-        withAnimation(.linear(duration: NotionFaceConfiguration.updateInterval)) {
-            eyePosition = pupilState.offset
-        }
-    }
-}
 
-// MARK: - Preview
-struct NotionFace_Previews: PreviewProvider {
-    static var previews: some View {
-        NotionFace()
-            .padding()
-            .background(Color.gray.opacity(0.2))
+    private func maybeSleep() {
+        // Always sleep after idle threshold
+        withAnimation(.easeInOut(duration: 0.5)) {
+            isSleeping = true
+            mood = .sleepy
+        }
+    }
+
+    private func wakeUp() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            isSleeping = false
+            isWakingUp = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + Config.wakeUpDuration) {
+            isWakingUp = false
+        }
+        
+        // Force refresh eye tracking
+        touchLocation = touchCoordinator.touchLocation
+    }
+
+    private func blink() {
+        guard !isBlinking else { return }
+        
+        withAnimation(.easeInOut(duration: Config.blinkDuration)) {
+            isBlinking = true
+        }
+        
+        // The eyes might be opening too quickly after closing
+        DispatchQueue.main.asyncAfter(deadline: .now() + Config.blinkDuration * 2) {
+            withAnimation(.easeInOut(duration: Config.blinkDuration)) {
+                isBlinking = false
+            }
+        }
+        
+        // Print blink debug info
+        #if DEBUG
+        print("🐱 Blink #\(blinkCount)")
+        print("  Time since last blink: \(Date().timeIntervalSince(lastBlinkTime))s")
+        print("  Time since last interaction: \(Date().timeIntervalSince(lastInteractionTime))s")
+        #endif
+        
+        lastBlinkTime = Date()
+    }
+
+    private func checkIdleState() {
+        let timeSinceLastInteraction = Date().timeIntervalSince(lastInteractionTime)
+        
+        // More sensitive idle detection
+        if !touchCoordinator.isBlockActive && 
+           timeSinceLastInteraction >= Config.idleThreshold && 
+           !isSleeping {
+            maybeSleep()
+        }
+    }
+    
+    // Reset last interaction time when touch occurs
+    private func updateInteraction() {
+        // Only wake if actually sleeping
+        if isSleeping {
+            wakeUp()
+        }
+        lastInteractionTime = Date()
+        lastBlinkTime = Date()
     }
 }

@@ -6,6 +6,7 @@
 - Block definitions
 - Basic state management
 - Touch handling system
+-cat mascot
 
 ### Block Fundamentals (20min)
 - Selection system
@@ -36,7 +37,6 @@
 ## Hour 3: Animation Systems & Advanced Feedback
 ### Animation Framework (30min)
 - Particle system setup
-- LED number system
 - Grid animation base
 - Streak counter
 
