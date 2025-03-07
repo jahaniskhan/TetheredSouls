@@ -1,6 +1,9 @@
 import SwiftUI
 import UIKit
 import Foundation
+
+
+
 // Add this if Block is defined in another module
 // import TetheredSoulsKit  
 
@@ -27,7 +30,6 @@ class NotionFaceProxy: ObservableObject {
 
 struct GamePanel: View {
     let score: Int
-    let currentStreak: Int
     let selectedBlock: Block?
     
     @State private var achievements: [Achievement] = []
@@ -246,6 +248,17 @@ struct GamePanel: View {
                         .zIndex(999)
                 }
                 */
+                
+                // Add this inside the main ZStack body
+                if score >= 100 && !flippedIndices.contains(0) {
+                    CatAchievementCard()
+                        .transition(.scale.combined(with: .opacity))
+                        .onAppear {
+                            withAnimation(.spring()) {
+                                flippedIndices.append(0)
+                            }
+                        }
+                }
             }
             .onChange(of: score) { oldValue, newValue in
                 // Handle feline stamp flips
@@ -267,6 +280,18 @@ struct GamePanel: View {
                     addBackgroundStamp(in: geometry)
                 }
                 */
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .init("BlockPlaced"))) { notification in
+                guard let position = notification.userInfo?["position"] as? CGPoint,
+                      let blockType = notification.userInfo?["blockType"] as? String else { return }
+                
+                // Trigger stamp animation
+                withAnimation(.spring()) {
+                    addBackgroundStamp(at: position)
+                }
+                
+                // Update notion face reaction
+                notionFaceRef.updateMood(randomMoodBasedOn(blockType))
             }
         }
         .frame(height: 150)
@@ -358,7 +383,6 @@ struct GamePanel: View {
     private func debugStreakStamps() {
         #if DEBUG
         print("Streak Stamps Debug:")
-        print("- Current streak: \(currentStreak)")
         print("- Available stamp types: \(StickerType.allCases)")
         print("- Total achievements: \(achievements.count)")
         print("- Stamp spacing: \(minStampSpacing)")
@@ -376,51 +400,20 @@ struct GamePanel: View {
         )
     }
     
-    private func addBackgroundStamp(in geometry: GeometryProxy) {
-        let stampSize: CGFloat = 42
-        let minSpacing: CGFloat = 25  // Slightly reduced for better packing
-        let padding: CGFloat = 10
+    private func addBackgroundStamp(at position: CGPoint) {
+        let newStamp = BackgroundStamp(
+            type: [.flowerstamp, .cherry, .lily].randomElement()!,
+            position: position,
+            rotation: Double.random(in: -25...25),
+            size: 60
+        )
         
-        // Add delay between stamp placements
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            var attempts = 0
-            var position: CGPoint
-            var isValidPosition = false
-            let maxAttempts = 100
-            
-            repeat {
-                attempts += 1
-                position = CGPoint(
-                    x: CGFloat.random(in: padding...(geometry.size.width - padding)),
-                    y: CGFloat.random(in: padding...(geometry.size.height - padding))
-                )
-                
-                isValidPosition = !isNearUIElements(position: position, in: geometry) &&
-                    !isNearOtherStamps(position: position, minSpacing: minSpacing)
-                
-                if attempts >= maxAttempts { break }
-                
-            } while !isValidPosition
-            
-            if isValidPosition {
-                let availableTypes = StickerType.allCases.filter { $0 != .felinestamp }
-                let selectedType = availableTypes
-                    .filter { $0 != lastUsedStampType }
-                    .randomElement() ?? availableTypes.randomElement() ?? .flowerstamp
-                
-                let stamp = BackgroundStamp(
-                    type: selectedType,
-                    position: position,
-                    rotation: Double.random(in: -35...35),
-                    size: stampSize
-                )
-                
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                    backgroundStamps.append(stamp)
-                    feedbackGenerator.impactOccurred(intensity: 0.5)
-                    lastUsedStampType = selectedType
-                }
-            }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+            backgroundStamps.append(newStamp)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            backgroundStamps.removeAll { $0.id == newStamp.id }
         }
     }
     
@@ -491,6 +484,19 @@ struct GamePanel: View {
             return distance < proximityRadius
         }.map { $0.type })
     }
+    
+    private func randomMoodBasedOn(_ blockType: String) -> CatMood {
+        let baseMood: CatMood
+        switch blockType {
+        case "heart": baseMood = .loving
+        case "sparkles": baseMood = .excited
+        case "square": baseMood = .curious
+        default: baseMood = .normal
+        }
+        
+        let variations: [CatMood] = [.normal, .playful, .sleepy]
+        return [baseMood, variations.randomElement()!].randomElement()!
+    }
 }
 
 // MARK: - Supporting Types
@@ -524,32 +530,6 @@ struct WobbleAnimation: ViewModifier {
     }
 }
 
-struct DigitalSegmentDisplay: View {
-    let progress: Double
-    let segments: Int = 5
-    
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<segments, id: \.self) { index in
-                Rectangle()
-                    .fill(progress >= Double(index + 1) / Double(segments) ? 
-                          Color(red: 99/255, green: 32/255, blue: 27/255) : 
-                          Color(red: 99/255, green: 32/255, blue: 27/255).opacity(0.2))
-                    .frame(width: 4, height: 15)
-                    .overlay(
-                        Rectangle()
-                            .stroke(Color(red: 99/255, green: 32/255, blue: 27/255), lineWidth: 0.5)
-                    )
-            }
-        }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 3)
-                .stroke(Color(red: 99/255, green: 32/255, blue: 27/255), lineWidth: 1)
-        )
-    }
-}
-
 // MARK: - Preview Provider
 struct GamePanel_Previews: PreviewProvider {
     static var previews: some View {
@@ -557,18 +537,49 @@ struct GamePanel_Previews: PreviewProvider {
             // Test streak = 5
             GamePanel(
                 score: 100,
-                currentStreak: 5,
                 selectedBlock: nil                
             )
             
             // Test streak = 10
             GamePanel(
                 score: 200,
-                currentStreak: 10,
                 selectedBlock: nil                
             )
         }
         .padding()
         .previewDisplayName("Streak Tests")
+    }
+}
+
+// Add this new struct at the bottom of the file
+struct CatAchievementCard: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(LinearGradient(
+                    gradient: Gradient(colors: [Color(hex: "FFE4E1"), Color(hex: "FFC3C0")]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+                .frame(width: 200, height: 120)
+                .shadow(radius: 10)
+            
+            VStack {
+                Image(systemName: "cat.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(Color(hex: "704341"))
+                Text("First Cat!")
+                    .font(.custom("Georgia-Bold", size: 16))
+                    .foregroundColor(Color(hex: "704341"))
+            }
+        }
+        .padding()
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                withAnimation {
+                    // Remove after display
+                }
+            }
+        }
     }
 }

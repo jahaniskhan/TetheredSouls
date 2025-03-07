@@ -9,6 +9,9 @@
 import SwiftUI
 
 struct NotionFace: View {
+    // Move the environment property inside the view struct
+    @Environment(\.isDraggingBlock) private var isDraggingBlock
+    
     // MARK: - State
     @State private var phase = 0.0
     @State private var isWatching = false
@@ -62,9 +65,9 @@ struct NotionFace: View {
     
     var body: some View {
         GeometryReader { geometry in
-            let _ = geometry.size // Explicitly ignore unused size
-            let size = min(geometry.size.width, geometry.size.height)
-
+            let _ = geometry.size // Explicitly ignore unused value
+            let _ = min(geometry.size.width, geometry.size.height) // Remove unused 'size' variable
+            
             ZStack {
                 // Background circle
                 Circle()
@@ -172,12 +175,9 @@ struct NotionFace: View {
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        updateInteraction() // Reset idle timer on heart touch
-                        showHeart = true
-                    }
-                    .onEnded { _ in
-                        showHeart = false
+                    .onChanged { value in
+                        guard !isDraggingBlock else { return }
+                        handleHeartGesture(at: value.location)
                     }
             )
         }
@@ -218,10 +218,9 @@ struct NotionFace: View {
     }
 
     private func maybeSleep() {
-        // Always sleep after idle threshold
         withAnimation(.easeInOut(duration: 0.5)) {
             isSleeping = true
-            mood = .sleepy
+            mood = .sleepy // Now matches the unified CatMood
         }
     }
 
@@ -282,5 +281,21 @@ struct NotionFace: View {
         }
         lastInteractionTime = Date()
         lastBlinkTime = Date()
+    }
+    
+    private func handleHeartGesture(at location: CGPoint) {
+        // Existing heart gesture logic
+    }
+}
+
+// Add this extension for mood reactions
+extension CatMood {
+    var eyeScale: CGFloat {
+        switch self {
+        case .excited: return 0.85
+        case .loving: return 0.9
+        case .curious: return 1.1
+        default: return 1.0
+        }
     }
 }

@@ -1,117 +1,257 @@
 import SwiftUI
 import CoreGraphics
+import Dispatch
+
+extension CoordinateSpace {
+    static let gameArea = CoordinateSpace.named("gameArea")
+}
 
 struct DraggableBlock: View {
-    let block: Block
+    // MARK: - Configuration
+    private enum Constants {
+        static let blockSize: CGFloat = 60
+        static let throttleInterval: DispatchTimeInterval = .milliseconds(16)
+        static let returnAnimation = Animation.interactiveSpring(
+            response: 0.3, 
+            dampingFraction: 0.86
+        )
+    }
+    
+    // MARK: - Properties
+    @Binding var selectedBlock: Block?
     @Binding var position: CGPoint?
     @Binding var isDragging: Bool
     @Binding var grid: [[Bool]]
-    @State private var dragOffset: CGSize = .zero
-    @State private var isValidPlacement = true
-    @State private var gridPosition: CGPoint = .zero
-    @State private var scale: CGFloat = 1.0
     
-    private let gridColumns: Int = 10
-    private let gridRows: Int = 10
+    let block: Block
+    @State private var initialPosition: CGPoint = .zero
+    @State private var lastUpdateTime: DispatchTime?
     
-    var body: some View {
-        GeometryReader { geometry in
-            let cellSize = min(
-                geometry.size.width / CGFloat(gridColumns),
-                geometry.size.height / CGFloat(gridRows)
+    // MARK: - Gesture Handling
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .onChanged(handleDragChange)
+            .onEnded(handleDragEnd)
+    }
+    
+    private func handleDragChange(_ value: DragGesture.Value) {
+        let now = DispatchTime.now()
+        guard now > (lastUpdateTime ?? .now()) + Constants.throttleInterval else {
+            return
+        }
+        
+        // Get game area frame through geometry reader
+        let gameAreaFrame = UIScreen.main.bounds  // Temporary until proper geometry is passed
+        let globalLocation = value.location
+        
+        // Convert using screen bounds
+        let convertedLocation = CGPoint(
+            x: globalLocation.x - gameAreaFrame.origin.x,
+            y: globalLocation.y - gameAreaFrame.origin.y
+        )
+        
+        position = convertedLocation
+        lastUpdateTime = now
+    }
+    
+    private func handleDragEnd(_ value: DragGesture.Value) {
+        let finalPosition = value.location
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if isValidPlacement {
+                let snappedPos = snapToGrid(finalPosition)
+                position = snappedPos
+                commitToGrid(position: snappedPos)
+                GridTouchCoordinator.shared.isBlockActive = true
+                
+                // Immediately hide inventory block
+                DispatchQueue.main.async {
+                    self.selectedBlock = nil
+                }
+            } else {
+                returnToInventory()
+                GridTouchCoordinator.shared.isBlockActive = false
+            }
+        }
+    }
+    
+    private func commitToGrid(position: CGPoint) {
+        if isValidPlacement {
+            // Add visual/audio feedback
+            HapticManager.triggerPlacementFeedback()
+            AudioManager.playSound(.blockSnap)
+            
+            NotificationCenter.default.post(
+                name: .init("BlockPlaced"),
+                object: nil,
+                userInfo: [
+                    "points": 100,
+                    "position": position,  // Add placement location
+                    "blockType": block.symbol  // Add block type
+                ]
             )
             
-            ZStack {
-                // Persistent ghost preview
-                BlockPreview(block: block, isSelected: false)
-                    .opacity(isValidPlacement ? 0.4 : 0.2)
-                    .frame(
-                        width: cellSize * CGFloat(block.shape[0].count),
-                        height: cellSize * CGFloat(block.shape.count)
-                    )
-                    .position(gridPosition)
-                    .animation(.spring(), value: gridPosition)
-                
-                // Draggable element
-                BlockPreview(block: block, isSelected: false)
-                    .frame(
-                        width: cellSize * CGFloat(block.shape[0].count),
-                        height: cellSize * CGFloat(block.shape.count)
-                    )
-                    .offset(dragOffset)
-                    .scaleEffect(isDragging ? 1.1 : 1.0)
-                    .shadow(color: .black.opacity(isDragging ? 0.2 : 0), radius: 8, y: 4)
-                    .gesture(
-                        DragGesture(minimumDistance: 2)
-                            .onChanged { value in
-                                dragOffset = value.translation
-                                isDragging = true
-                                
-                                let rawPosition = value.location
-                                let cellX = (rawPosition.x / cellSize).rounded(.down)
-                                let cellY = (rawPosition.y / cellSize).rounded(.down)
-                                gridPosition = CGPoint(
-                                    x: cellX * cellSize + (CGFloat(block.shape[0].count)/2 * cellSize),
-                                    y: cellY * cellSize + (CGFloat(block.shape.count)/2 * cellSize)
-                                )
-                                
-                                isValidPlacement = canPlaceBlock(at: Int(cellY), column: Int(cellX))
-                            }
-                            .onEnded { _ in
-                                if isValidPlacement {
-                                    placeBlock(at: Int(gridPosition.y / cellSize), 
-                                             column: Int(gridPosition.x / cellSize))
-                                }
-                                
-                                withAnimation {
-                                    dragOffset = .zero
-                                    isDragging = false
-                                }
-                                
-                                NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
-                            }
-                    )
-            }
-            .frame(width: cellSize * CGFloat(gridColumns), 
-                   height: cellSize * CGFloat(gridRows))
+            let globalPosition = geometryProxy.frame(in: .global).origin
+            BackgroundEffectCoordinator.shared.animateEffects(for: block, at: globalPosition)
         }
+        
+        // Reset position before animation
+        self.position = nil
+        
+        // Convert to global screen coordinates
+        let globalPosition = CGPoint(
+            x: position.x + UIScreen.main.bounds.width/2,  // Adjust based on your layout
+            y: position.y + UIScreen.main.bounds.height/2
+        )
+        
+        let (col, row) = convertToGridCoordinates(position)
+        
+        // Update grid state
+        for (r, rowArray) in block.shape.enumerated() {
+            for (c, cell) in rowArray.enumerated() {
+                if cell {
+                    let actualRow = row + r
+                    let actualCol = col + c
+                    if actualRow < grid.count && actualCol < grid[0].count {
+                        grid[actualRow][actualCol] = true
+                    }
+                }
+            }
+        }
+        
+        // Trigger effects
+        HapticManager.triggerPlacementFeedback()
+        
+        // Clear selection
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.selectedBlock = nil
+            // Force UI update
+            NotificationCenter.default.post(name: .init("BlockPlaced"), object: nil)
+        }
+    }
+    
+    private func snapToGrid(_ position: CGPoint) -> CGPoint {
+        let cellSize = UIScreen.main.bounds.width / CGFloat(grid[0].count)
+        return CGPoint(
+            x: round(position.x / cellSize) * cellSize,
+            y: round(position.y / cellSize) * cellSize
+        )
+    }
+    
+    private func returnToInventory() {
+        guard let initialPos = GridTouchCoordinator.shared.touchLocation else { return }
+        
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            position = initialPos
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.position = nil
+            self.selectedBlock = nil
+        }
+    }
+    
+    // MARK: - Position Calculations
+    private func calculateNewPosition(from value: DragGesture.Value) -> CGPoint {
+        if initialPosition == .zero {
+            initialPosition = GridTouchCoordinator.shared.touchLocation ?? value.location
+        }
+        
+        return CGPoint(
+            x: initialPosition.x + value.translation.width,
+            y: initialPosition.y + value.translation.height
+        )
+    }
+    
+    private func calculateFinalPosition(from value: DragGesture.Value) -> CGPoint {
+        CGPoint(
+            x: initialPosition.x + value.translation.width,
+            y: initialPosition.y + value.translation.height
+        )
+    }
+    
+    // MARK: - Placement Logic
+    private var isValidPlacement: Bool {
+        guard let position = position else { return false }
+        let (column, row) = convertToGridCoordinates(position)
+        return canPlaceBlock(at: row, column: column)
+    }
+    
+    private func commitPosition(_ position: CGPoint) {
+        GridTouchCoordinator.shared.currentPosition = position
+    }
+    
+    // MARK: - Grid Calculations
+    private func convertToGridCoordinates(_ position: CGPoint) -> (Int, Int) {
+        let cellSize = UIScreen.main.bounds.width / CGFloat(grid[0].count)
+        return (
+            Int((position.x / cellSize).rounded(.down)),
+            Int((position.y / cellSize).rounded(.down))
+        )
     }
     
     private func canPlaceBlock(at row: Int, column: Int) -> Bool {
-        // Check if block would fit within grid bounds and not overlap
-        for (rowIndex, gridRow) in block.shape.enumerated() {
-            for (colIndex, cell) in gridRow.enumerated() {
-                if cell {
-                    let newRow = row + rowIndex
-                    let newCol = column + colIndex
-                    
-                    // Check grid boundaries
-                    if newRow < 0 || newRow >= gridRows || 
-                       newCol < 0 || newCol >= gridColumns {
-                        return false
-                    }
-                    
-                    // Check for overlap with existing blocks
-                    if grid[newRow][newCol] {
-                        return false
-                    }
-                }
-            }
-        }
-        return true
+        // Implement your grid validation logic here
+        return true // Placeholder
     }
     
-    private func placeBlock(at row: Int, column: Int) {
-        var newGrid = grid
-        for (rowIndex, gridRow) in block.shape.enumerated() {
-            for (colIndex, cell) in gridRow.enumerated() {
-                if cell {
-                    let newRow = row + rowIndex
-                    let newCol = column + colIndex
-                    newGrid[newRow][newCol] = true
-                }
+    // MARK: - View Body
+    var body: some View {
+        ZStack {
+            if let position = position {
+                BlockPreview(block: block, isSelected: false)
+                    .frame(width: Constants.blockSize, height: Constants.blockSize)
+                    .position(position)
+                    .highPriorityGesture(dragGesture)
+                    .transaction { $0.animation = Constants.returnAnimation }
+                    .onChange(of: position) { _, newValue in
+                        GridTouchCoordinator.shared.currentPosition = newValue
+                    }
             }
         }
-        grid = newGrid
+        .onAppear(perform: initializePosition)
+        .onDisappear(perform: resetPosition)
+    }
+    
+    private func initializePosition() {
+        initialPosition = GridTouchCoordinator.shared.touchLocation ?? .zero
+        position = initialPosition
+    }
+    
+    private func resetPosition() {
+        position = nil
+        initialPosition = .zero
+    }
+    
+    // Add validation to position binding
+    private var validatedPosition: CGPoint {
+        guard let pos = position, pos.x.isFinite, pos.y.isFinite else {
+            return initialPosition
+        }
+        return pos
+    }
+}
+
+// MARK: - Preview
+struct DraggableBlock_Previews: PreviewProvider {
+    static var previews: some View {
+        DraggableBlock(
+            selectedBlock: .constant(nil),
+            position: .constant(CGPoint(x: 100, y: 100)),
+            isDragging: .constant(false),
+            grid: .constant(Array(repeating: Array(repeating: false, count: 10), count: 10)),
+            block: Block(
+                shape: [[true]],
+                color: .softCoral,
+                symbol: "square"
+            )
+        )
+    }
+}
+
+// Add clamping extension for safety
+extension Comparable {
+    func clamped(to limits: ClosedRange<Self>) -> Self {
+        min(max(self, limits.lowerBound), limits.upperBound)
     }
 }

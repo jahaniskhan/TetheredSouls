@@ -3,37 +3,21 @@ import SwiftUI
 struct BlockPreview: View {
     let block: Block
     let isSelected: Bool
-    let isValidPlacement: Bool = true
-    @State private var isHovered = false
     
     var body: some View {
-        VStack(spacing: 2) {
-            ForEach(Array(block.shape.enumerated()), id: \.offset) { rowIndex, row in
-                HStack(spacing: 2) {
-                    ForEach(Array(row.enumerated()), id: \.offset) { colIndex, cell in
-                        Rectangle()
-                            .fill(cell ? (isValidPlacement ? block.color.color : Color.red.opacity(0.3)) : Color.clear)
-                            .aspectRatio(1, contentMode: .fit)
-                            .overlay(
-                                Rectangle()
-                                    .stroke(isHovered && cell ? block.color.color.opacity(0.6) : Color.clear, lineWidth: 2)
-                                    .padding(1)
-                            )
-                    }
-                }
-            }
+        ZStack {
+            // Pure geometric form as originally designed
+            RoundedRectangle(cornerRadius: 12)
+                .fill(block.color.color)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        // Temporary dashed placeholder until Theme is fixed
+                        .strokeBorder(Color.black.opacity(0.2), style: StrokeStyle(lineWidth: 2, dash: [4]))
+                )
+                .frame(width: 60, height: 60)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(4)
-        .background(Color.clear)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(isSelected ? Theme.primary : Color.clear, lineWidth: 2)
-        )
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.2)) {
-                isHovered = hovering
-            }
-        }
+        .scaleEffect(isSelected ? 1.1 : 1)
+        .shadow(color: .black.opacity(0.3), radius: isSelected ? 8 : 4, x: 0, y: 2)
+        .animation(.spring(response: 0.3), value: isSelected)
     }
 }

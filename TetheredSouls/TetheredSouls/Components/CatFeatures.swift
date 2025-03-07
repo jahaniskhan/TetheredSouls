@@ -23,8 +23,16 @@ struct LineShape: Shape {
     }
 }
 
-enum CatMood {
-    case normal, happy, sad, sleepy, watching
+enum CatMood: String, CaseIterable {
+    case normal
+    case happy
+    case sad
+    case sleepy
+    case watching
+    case loving
+    case excited
+    case curious
+    case playful
 }
 
 struct CatFeatures: View {
@@ -44,13 +52,15 @@ struct CatFeatures: View {
     @State private var zOffset: CGFloat = 0
     @State private var sleepyMouthOffset: CGFloat = 0
     @State private var sleepyWhiskerRotation: Double = 0
+    @State private var showHeart = false
     
     // MARK: - Helper Methods
     private func calculateFrameNumber(eyeCenter: CGPoint) -> Int {
+        handleInteraction()
+        
         if isBlinking { return 13 }
         
         if let touch = touchLocation {
-            NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
             return EyeGeometry.calculateFrameNumber(
                 touchPoint: touch,
                 eyeCenter: eyeCenter,
@@ -59,6 +69,20 @@ struct CatFeatures: View {
             )
         }
         return 13
+    }
+    
+    private func handleInteraction() {
+        NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+        
+        // Cancel any pending sleep animations
+        NSObject.cancelPreviousPerformRequests(withTarget: self)
+        
+        // Heart gesture handling
+        if showHeart {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                showHeart = false
+            }
+        }
     }
     
     var body: some View {

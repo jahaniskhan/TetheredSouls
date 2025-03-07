@@ -21,7 +21,7 @@ struct DoodleElement: View {
     init(type: DoodleType, rotation: Double, streak: Int) {
         self.type = type
         self.rotation = rotation
-        self.thickness = CGFloat(min(streak, 10)) * 0.08 + 0.5
+        self.thickness = CGFloat(min(streak, 10)) * 0.2 + 1.0
         
         // Let the colors speak their truth
         let colors: [Color] = [
@@ -32,7 +32,7 @@ struct DoodleElement: View {
         ]
         
         // Let the color intensity grow with the streak
-        let streakIntensity = Double(min(streak, 10)) * 0.1 + 0.6
+        let streakIntensity = Double(min(streak, 10)) * 0.2 + 0.8
         self.color = colors[Int.random(in: 0..<colors.count)]
             .opacity(streakIntensity)
     }
@@ -53,14 +53,18 @@ struct DoodleElement: View {
         case .moon: MoonDoodle(color: color, thickness: thickness)
         case .swirl: SwirlDoodle(color: color, thickness: thickness)
         case .xSmile: XSmileDoodle(color: color)
+        case .sparkle: SparkleDoodle(color: color)
+        case .puzzle: PuzzleDoodle(color: color)
         }
     }
 }
 
 // MARK: - Supporting Types
-public enum DoodleType: Hashable {
-    case star, heart, semicolon, moon, swirl, xSmile  // Simple, clean symbols
-}
+// DELETE THESE LINES (keep the Models/DoodleType.swift version)
+// enum DoodleType: String, CaseIterable {
+//     case star = "star.fill"
+//     ...
+// }
 
 // MARK: - Private Components
 
@@ -69,9 +73,10 @@ private struct StarDoodle: View {
     let color: Color
     
     var body: some View {
-        Text("✧")  // Clean sparkle
-            .font(.system(size: 20))
+        Text("✦")  // Bolder star symbol
+            .font(.system(size: 28, weight: .black)) // Increased size and weight
             .foregroundColor(color)
+            .shadow(color: color.opacity(0.4), radius: 3, x: 0, y: 0)
     }
 }
 
@@ -151,5 +156,26 @@ private struct XSmileDoodle: View {
             lineCap: .round,
             lineJoin: .round
         ))
+    }
+}
+
+// Add missing doodle types
+private struct SparkleDoodle: View {
+    let color: Color
+    
+    var body: some View {
+        Text("✨")
+            .font(.system(size: 20))
+            .foregroundColor(color)
+    }
+}
+
+private struct PuzzleDoodle: View {
+    let color: Color
+    
+    var body: some View {
+        Text("🧩")
+            .font(.system(size: 20))
+            .foregroundColor(color)
     }
 }

@@ -26,7 +26,8 @@ struct TetheredSoulsApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(GameStateManager.shared)
         }
-        .modelContainer(sharedModelContainer)
+       // .modelContainer(sharedModelContainer)
     }
 }

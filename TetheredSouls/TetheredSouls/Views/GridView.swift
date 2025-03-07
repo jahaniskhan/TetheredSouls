@@ -20,52 +20,40 @@ struct GridView: View {
     func canPlaceBlock(at row: Int, column: Int) -> Bool {
         guard let block = selectedBlock else { return false }
         
-        for (r, rows) in block.shape.enumerated() {
-            for (c, cell) in rows.enumerated() {
-                if cell {
-                    let newRow = row + r
-                    let newCol = column + c
-                    if newRow >= 10 || newCol >= 10 || grid[newRow][newCol] {
-                        return false
-                    }
-                }
+        return block.shape.enumerated().allSatisfy { (r, rows) in
+            rows.enumerated().allSatisfy { (c, cell) in
+                guard cell else { return true }
+                let newRow = row + r
+                let newCol = column + c
+                return (0..<grid.count).contains(newRow) && 
+                       (0..<grid[newRow].count).contains(newCol)
             }
         }
-        return true
     }
     
     private func isDraggingOver(row: Int, column: Int) -> Bool {
-        guard let _ = selectedBlock,
-              let position = blockPosition,
-              isDragging else { return false }
+        guard let position = blockPosition else { return false }
         
         let cellFrame = CGRect(
-            x: CGFloat(column) * cellSize,
-            y: CGFloat(row) * cellSize,
+            x: CGFloat(column) * cellSize + cellSize/2, // Center-based detection
+            y: CGFloat(row) * cellSize + cellSize/2,
             width: cellSize,
             height: cellSize
         )
         
-        let adjustedPosition = CGPoint(
-            x: position.x - cellSize / 2,
-            y: position.y - cellSize / 2
-        )
-        
-        return cellFrame.contains(adjustedPosition)
+        return cellFrame.contains(position)
     }
     
-    func placeBlock(at row: Int, column: Int) {
+    private func placeBlock(at row: Int, column: Int) {
         guard let block = selectedBlock else { return }
         
         var newGrid = grid
         for (r, rows) in block.shape.enumerated() {
             for (c, cell) in rows.enumerated() {
                 if cell {
-                    let newRow = row + r
-                    let newCol = column + c
-                    if newRow < grid.count && newCol < grid[0].count {
-                        newGrid[newRow][newCol] = true
-                    }
+                    let newRow = (row + r).clamped(to: 0..<grid.count)
+                    let newCol = (column + c).clamped(to: 0..<grid[0].count)
+                    newGrid[newRow][newCol] = true
                 }
             }
         }
@@ -73,7 +61,9 @@ struct GridView: View {
         grid = newGrid
         checkForCompletedRows()
         
-        // Immediately reset selection
+        // Wake the cat
+        NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+        
         DispatchQueue.main.async {
             selectedBlock = nil
             isDragging = false
@@ -106,7 +96,7 @@ struct GridView: View {
     // First extract the cell creation logic into a separate function
     private func makeCell(row: Int, column: Int) -> some View {
         let isFilled = grid[row][column]
-        let isHighlighted = isDraggingOver(row: row, column: column)
+        _ = isDraggingOver(row: row, column: column) // Silence warning
         let isValidPlacement = canPlaceBlock(at: row, column: column)
         
         return CellView(
@@ -255,11 +245,12 @@ struct GridStyleModifier: ViewModifier {
             .overlay(
                 GridLines()
                     .stroke(
-                        Color(hex: "6B5B4E").opacity(0.15),
-                        style: StrokeStyle(
-                            lineWidth: 0.5,
-                            lineCap: .round
-                        )
+                        LinearGradient(
+                            gradient: Gradient(colors: [Theme.gridLine.opacity(0.2), Theme.gridLine.opacity(0.4)]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
                     )
             )
             .rotation3DEffect(

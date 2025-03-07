@@ -1,0 +1,40 @@
+Current Issues:
+1. Artifact/Positioning Problem:
+- Blocks are leaving remnants in top-left (0,0 position)
+- Caused by position state not being fully reset after placement
+- DraggableBlock's position binding isn't properly nil'ed out
+
+2. Drag Gesture Conflicts:
+- Existing drag gesture handling is interfering with placement
+- The minimumDistance:0 in DragGesture makes it too sensitive
+- Coordinate space calculations might be offset
+
+3. Swipe Recognition Missing:
+- No dedicated swipe gesture recognizer
+- Need to distinguish between drags and intentional swipes
+- Current implementation only handles precise drags
+
+Recommended Fixes:
+1. Add swipe gesture recognizer to BlockPreview:
+   - Use .simultaneousGesture with DirectionalDragGesture
+   - Check for vertical swipe motion with minimum distance
+
+2. Improve gesture handling in DraggableBlock:
+   - Add gesture coordination with GridTouchCoordinator
+   - Implement swipe threshold detection (e.g., >50pt vertical movement)
+
+3. Fix artifact issues:
+   - Ensure position binding is properly reset to nil after placement
+   - Add transition animation when blocks are placed
+   - Verify CoordinateSpace.gameArea frame calculations
+
+4. Eye Tracking Integration:
+   - The invalid samples suggest timing issues in animation system
+   - Consider adding gesture debouncing
+   - Verify ARKit/CoreMotion integration points
+
+Implementation Strategy:
+1. Add swipe gesture handler to ContentView's block palette
+2. Modify DraggableBlock to handle both precise drags and swipe motions
+3. Use GridTouchCoordinator to mediate between grid taps and swipe gestures
+4. Add cleanup logic in onDisappear for DraggableBlock 

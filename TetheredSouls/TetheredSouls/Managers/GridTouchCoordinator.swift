@@ -9,25 +9,24 @@ class GridTouchCoordinator: ObservableObject {
     
     @Published var touchLocation: CGPoint? = nil {
         didSet {
-            print("GridTouchCoordinator location updated: \(String(describing: touchLocation))")
+            // Comment out eye tracking debug prints
+            // print("GridTouchCoordinator location updated: \(String(describing: touchLocation))")
         }
     }
 
     private init() {}
 
     func handleGridTap(location: CGPoint, geometry: GeometryProxy) {
+        let adjustedLocation = CGPoint(
+            x: location.x - geometry.frame(in: .global).origin.x,
+            y: location.y - geometry.frame(in: .global).origin.y
+        )
+        
+        // Use geometry.size for grid calculations
         let cellSize = geometry.size.width / 10
-        let column = Int((location.x / cellSize).rounded(.toNearestOrEven))
-        let row = Int((location.y / cellSize).rounded(.toNearestOrEven))
+        let column = Int((adjustedLocation.x / cellSize).rounded())
+        let row = Int((adjustedLocation.y / cellSize).rounded())
         
-        // Immediate update
-        DispatchQueue.main.async {
-            self.currentPosition = CGPoint(x: column, y: row)
-            self.isBlockActive = true
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.isBlockActive = false
-        }
+        print("🎯 Final grid placement: (\(column), \(row))")
     }
 } 
