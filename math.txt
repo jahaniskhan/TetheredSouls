@@ -1,0 +1,71 @@
+MATHEMATICAL MODEL:
+
+
+COORDINATE SYSTEM:
+
+
+Each eye needs two key coordinates:
+
+E(x,y): Eye center (anchor point)
+P(x,y): Current mouse/touch position
+
+
+
+
+BOUNDARY DEFINITION:
+
+
+Each eye's movement boundary is an ellipse
+Can be defined by the equation: (x²/a²) + (y²/b²) = 1
+Where a and b are the horizontal/vertical radii from your eye center
+
+
+TANGENCY CALCULATION:
+
+For any point (x,y) on the ellipse, the tangent angle φ is given by:
+φ = arctan(-b²x/a²y)
+
+Special case: When y = 0
+- If x = 0: φ = 0 
+- If x > 0: φ = -π/2
+- If x < 0: φ = π/2
+
+Calculate θ = arctan((y-Ey)/(x-Ex))
+This gives you the angle from eye center to touch point
+The pupil's flat edge should be perpendicular to this angle
+
+
+
+
+VALIDATION:
+Tell them to debug by drawing:
+
+1. Eye center point E(x,y)
+2. Current touch point P(x,y)
+3. Elliptical boundary (x²/a²) + (y²/b²) = 1
+4. Tangent line at pupil position using calculated φ
+5. Line from E to P showing direction
+
+
+
+
+SHAPES WE'RE DEALING WITH:
+
+1. balls.png (Eyeballs):
+- Two ovular/elliptical shapes
+- Not perfect ovals but slightly irregular
+- Open outlines that will contain the pupils
+
+2. pupil.png (Pupil):
+- A small, solid black shape
+- More like a teardrop or water droplet shape
+- Has a rounded edge on one side
+- Will need to rotate within the boundaries of balls.png
+
+This is actually simpler than the previous assumption - instead of dealing with a flat edge, we're working with a teardrop/droplet shape that needs to:
+- Stay within the ovular boundary
+- Rotate smoothly
+- Point toward user interaction points
+- Maintain contact with the outer edge of balls.png at the rounded part
+
+This shape actually makes more sense for smooth rotational movement within an oval boundary.

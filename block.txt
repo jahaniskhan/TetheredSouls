@@ -1,0 +1,75 @@
+Block Positioning Analysis - Out of Frame Bottom Origin
+
+Current Technical Implementation (Why Blocks Come From Bottom):
+1. Inventory System Design:
+- Blocks originate from a hidden inventory panel below visible screen area
+- Initial position set via GridTouchCoordinator.shared.touchLocation
+- ReturnToInventory() animates position back to bottom coordinates
+
+2. Coordinate System Setup:
+- Using UIScreen.main.bounds for coordinate conversions
+- position binding initialized to bottom-based touchLocation
+- snapToGrid() calculations based on screen-width divided grid
+
+3. Animation Logic:
+- initializePosition() sets position to touchLocation (bottom)
+- returnToInventory() explicitly animates to bottom coordinates
+- ZStack hierarchy places inventory below visible game area
+
+Contrast with iMessage Sticker Behavior:
+1. Origin Point:
+- iMessage: Stickers spawn from finger contact point
+- TetheredSouls: Blocks spawn from fixed bottom inventory
+
+2. Coordinate Mapping:
+- iMessage: Uses superview-relative coordinates
+- TetheredSouls: Uses global screen coordinates
+
+3. Motion Physics:
+- iMessage: Direct finger-following with momentum
+- TetheredSouls: Inventory-style spring animations
+
+Proposed Solutions:
+1. Immediate Fixes:
+// In DraggableBlock.swift
+private func initializePosition() {
+    // Replace with:
+    initialPosition = value.startLocation // Use gesture start point
+    position = value.startLocation
+}
+
+2. Coordinate System Adjustment:
+// In handleDragChange()
+let convertedLocation = value.location // Skip frame conversion
+position = convertedLocation
+
+3. Animation Changes:
+// Modify returnToInventory()
+withAnimation(.spring()) {
+    position = value.startLocation // Return to drag start point
+}
+
+4. UI System Alignment:
+- Implement visible inventory tray at bottom (like iMessage app drawer)
+- Make blocks visually emerge from tray but spawn at touch point
+- Add tray open/close animations matching iMessage physics
+
+Recommended Implementation Path:
+1. Add InventoryTrayView component at bottom
+2. Convert to gesture.startLocation positioning
+3. Implement tray-based spawn with physics-based emergence
+4. Maintain return-to-origin logic but use dynamic positions
+
+Example Code Snippet:
+// New inventory spawn logic
+func spawnBlock(at position: CGPoint) {
+    let newBlock = DraggableBlock(
+        position: $position,
+        initialPosition: position, // Spawn at touch point
+        // ... other params
+    )
+    // Add emergence animation
+    withAnimation(.interactiveSpring()) {
+        activeBlocks.append(newBlock)
+    }
+}
