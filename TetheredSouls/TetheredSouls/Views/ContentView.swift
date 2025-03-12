@@ -4,6 +4,9 @@ import Combine
 import CoreGraphics
 import CoreFoundation
 
+protocol DragStateResettable {
+    func resetDragStates()
+}
 
 struct ContentView: View {
     private let columns: Int = 10
@@ -19,9 +22,11 @@ struct ContentView: View {
     @State private var eyePosition: CGPoint = .zero
     @State private var showedFirstCat = false
     
-    @State private var availableBlocks: [Block] = Block.blocks
+    @State private var availableBlocks: [Block] = []
     
     @StateObject private var streakManager = StreakManager()
+    
+    @State private var gridGeometry = GridGeometry(frame: .zero, cellSize: 30)
     
     private var backgroundDoodles: some View {
         GeometryReader { geometry in
@@ -124,29 +129,30 @@ struct ContentView: View {
                             availableBlocks: $availableBlocks,
                             selectedBlock: $selectedBlock,
                             blockPosition: $blockPosition,
-                            isDragging: $isDragging
+                            isDragging: $isDragging,
+                            gridGeometry: $gridGeometry
                         )
                             .frame(height: 140)
                             .padding(.horizontal, 20)
                     }
                     .padding(.vertical, 16)
                 }
+                .coordinateSpace(name: "gameArea")
                 
                 if let block = selectedBlock {
-                    let frame = GameStateManager.shared.blockFrames[block.id]
-                    let initialPosition = frame != nil ? CGPoint(x: frame!.midX, y: frame!.midY) : .zero
-                    
-                    // Calculate cell size to match grid cells
-                    let screenWidth = UIScreen.main.bounds.width
-                    let availableWidth = screenWidth - (2 * Theme.Layout.padding)
-                    let totalSpacing = Theme.Layout.gridSpacing * 9
-                    let cellSize = max((availableWidth - totalSpacing) / 10, 30)
-                    
-                    BlockPreview(block: block, isSelected: true)
-                        .frame(width: cellSize, height: cellSize)
-                        .position(blockPosition ?? initialPosition)
-                        .transition(.identity)
-                        .zIndex(2)
+                    DraggableBlock(
+                        selectedBlock: $selectedBlock,
+                        isDragging: $isDragging,
+                        blockPosition: $blockPosition,
+                        grid: $grid,
+                        projectedCells: Binding<[(row: Int, column: Int)]>(
+                            get: { GridProjectionCoordinator.shared.projectedCells },
+                            set: { GridProjectionCoordinator.shared.projectedCells = $0 }
+                        ),
+                        block: block,
+                        gridGeometry: gridGeometry
+                    )
+                    .zIndex(2)
                 }
                 
                 if isLoading {
@@ -206,6 +212,21 @@ struct ContentView: View {
                     score += points
                 }
             }
+            .onPreferenceChange(GridGeometryKey.self) { geometry in
+                #if DEBUG
+                print("GridGeometry updated: \(geometry.frame)")
+                #endif
+                self.gridGeometry = geometry
+                
+                // Ensure GridProjectionCoordinator knows about grid geometry
+                GridProjectionCoordinator.shared.gridFrame = geometry.frame
+                GridProjectionCoordinator.shared.cellSize = geometry.cellSize
+            }
+            .onChange(of: isDragging) { oldValue, newValue in
+                if !newValue {
+                    resetDragStates()
+                }
+            }
         }
     }
 }
@@ -235,5 +256,15 @@ class StreakManager: ObservableObject {
         streakTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
             self.currentStreak = 0
         }
+    }
+}
+
+// Add state reset protocol
+extension ContentView: DragStateResettable {
+    func resetDragStates() {
+        selectedBlock = nil
+        blockPosition = nil
+        isDragging = false
+        GridProjectionCoordinator.shared.projectedCells = []
     }
 }

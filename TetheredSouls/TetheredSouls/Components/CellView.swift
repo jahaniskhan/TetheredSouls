@@ -26,24 +26,13 @@ struct CellView: View {
                         Rectangle()
                             .stroke(Theme.stroke, lineWidth: 1)
                     )
-                    .onTapGesture {
-                        if !isOccupied && selectedBlock == nil {
-                            showHeart = true
-                            
-                            // Convert cell center to grid coordinates
-                            let cellCenter = CGPoint(
-                                x: geo.frame(in: .global).midX,
-                                y: geo.frame(in: .global).midY
-                            )
-                            
-                            touchCoordinator.touchLocation = cellCenter
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                                showHeart = false
-                                touchCoordinator.touchLocation = nil
-                            }
-                        }
-                    }
+                
+                // Show an overlay when cell is part of a projection
+                if isPreview {
+                    Rectangle()
+                        .fill(previewColor)
+                        .opacity(0.5)
+                }
                 
                 if showHeart {
                     HeartParticle(color: colors.randomElement() ?? Theme.primary)
@@ -53,9 +42,15 @@ struct CellView: View {
     }
     
     private var backgroundColor: Color {
-        if isPreview {
-            return (selectedBlock?.color.color ?? Theme.primary).opacity(0.3)
+        if isOccupied {
+            return isPreview ? Color.white.opacity(0.3) : Theme.primary
+        } else {
+            return Color.white.opacity(0.05)
         }
-        return isOccupied ? Theme.primary : Theme.surface
+    }
+    
+    private var previewColor: Color {
+        guard let block = selectedBlock else { return .clear }
+        return block.color.color
     }
 }

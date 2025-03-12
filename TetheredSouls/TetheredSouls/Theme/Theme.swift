@@ -50,6 +50,8 @@ enum Theme {
     static let gridBackground = Color(hex: "F5E6D3")  // Same as background
     static let gridLine = Color(hex: "6B5B4E").opacity(0.2)  // Light pencil lines
     
+    static let cellFill = Color(hex: "D8D8D8") // Light gray color for filled cells
+    
     enum Layout {
         static let spacing: CGFloat = 16
         static let padding: CGFloat = 20

@@ -5,6 +5,7 @@ struct BlockSelectionView: View {
     @Binding var selectedBlock: Block?
     @Binding var blockPosition: CGPoint?
     @Binding var isDragging: Bool
+    @Binding var gridGeometry: GridGeometry
     
     // Track which block is being dragged
     @State private var draggedBlockId: UUID? = nil
@@ -19,6 +20,31 @@ struct BlockSelectionView: View {
     private let textColor = Color.white                  // White text for contrast
     private let borderColor = Color(hex: "ACD1AF")       // Sage green border
     
+    // Add these new properties to the view
+    @State private var replacementQueue: [Block] = []
+    private let visibleBlockCount = 3 // Number of blocks shown at once
+    @State private var usedBlocks: Set<UUID> = []
+    
+    // Add this property
+    @Namespace private var namespace
+    
+    init(
+        availableBlocks: Binding<[Block]>,
+        selectedBlock: Binding<Block?>,
+        blockPosition: Binding<CGPoint?>,
+        isDragging: Binding<Bool>,
+        gridGeometry: Binding<GridGeometry>
+    ) {
+        _availableBlocks = availableBlocks
+        _selectedBlock = selectedBlock
+        _blockPosition = blockPosition
+        _isDragging = isDragging
+        _gridGeometry = gridGeometry
+        if availableBlocks.wrappedValue.isEmpty {
+            generateInitialBlocks()
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Thinner header with love message in true cursive font
@@ -32,8 +58,8 @@ struct BlockSelectionView: View {
                 
                 // Heart icon with breathing animation
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 18))  // Smaller heart to match thinner header
-                    .foregroundColor(textColor)
+                    .font(.system(size: 18))
+                    .foregroundColor(isDragging ? Color(hex: "8B2635") : textColor)
                     .scaleEffect(heartBeat ? 1.15 : 1.0)
                     .opacity(heartBeat ? 1.0 : 0.85)
                     .animation(
@@ -48,13 +74,15 @@ struct BlockSelectionView: View {
             
             // Blocks container with subtle animations
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 20) {
                     ForEach(availableBlocks) { block in
                         BlockItemView(
                             block: block,
                             isSelected: selectedBlock?.id == block.id,
                             isDragged: draggedBlockId == block.id,
                             isHovered: hoveredBlockId == block.id,
+                            cellSize: gridGeometry.cellSize,
+                            gridGeometry: gridGeometry,
                             onHoverChanged: { hovering in
                                 withAnimation(.spring(response: 0.3)) {
                                     hoveredBlockId = hovering ? block.id : nil
@@ -65,15 +93,14 @@ struct BlockSelectionView: View {
                             },
                             onDragEnded: { value in
                                 handleDragEnd(value: value, block: block)
-                            }
+                            },
+                            namespace: namespace
                         )
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.8).combined(with: .opacity).animation(.spring(response: 0.4, dampingFraction: 0.7)),
-                            removal: .scale(scale: 0.6).combined(with: .opacity).animation(.easeOut(duration: 0.2))
-                        ))
+                        .zIndex(draggedBlockId == block.id ? 3 : 0)
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
             .frame(height: 100)
@@ -90,33 +117,92 @@ struct BlockSelectionView: View {
         .padding(.horizontal, 8)
         .scaleEffect(isExpanded ? 1.0 : 0.95)
         .opacity(isExpanded ? 1.0 : 0.8)
+        .coordinateSpace(name: "gameArea")
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                isExpanded = true
+            if availableBlocks.isEmpty {
+                availableBlocks = Array(Block.blocks.shuffled().prefix(3))
             }
         }
     }
     
     private func handleDragChange(value: DragGesture.Value, block: Block) {
-        blockPosition = value.location
-        selectedBlock = block
-        isDragging = true
-        withAnimation(.spring(response: 0.3)) {
-            draggedBlockId = block.id
+        DispatchQueue.main.async {
+            #if DEBUG
+            print("BlockSelectionView - Drag location: \(value.location)")
+            print("BlockSelectionView - Grid frame in coordinator: \(GridProjectionCoordinator.shared.gridFrame)")
+            #endif
+            
+            // Set which block is being dragged
+            self.draggedBlockId = block.id
+            
+            // Set position and update selection
+            self.blockPosition = value.location 
+            self.selectedBlock = block
+            self.isDragging = true
+            
+            // Calculate and update grid projection
+            if let droppedBlock = self.selectedBlock {
+                updateGridProjection(position: value.location, block: droppedBlock)
+            }
         }
     }
     
+    private func updateGridProjection(position: CGPoint, block: Block) {
+        guard let (row, col) = GridProjectionCoordinator.shared.calculateGridCell(at: position) else {
+            GridProjectionCoordinator.shared.projectedCells = []
+            return
+        }
+        
+        // Create array of affected cells based on block shape
+        var projectedCells: [(row: Int, column: Int)] = []
+        
+        for blockRow in 0..<block.shape.count {
+            for blockCol in 0..<block.shape[blockRow].count {
+                if block.shape[blockRow][blockCol] {
+                    let gridRow = row + blockRow
+                    let gridCol = col + blockCol
+                    
+                    // Only add cells that are within grid bounds
+                    if gridRow >= 0 && gridRow < 10 && gridCol >= 0 && gridCol < 10 {
+                        projectedCells.append((row: gridRow, column: gridCol))
+                    }
+                }
+            }
+        }
+        
+        #if DEBUG
+        if !projectedCells.isEmpty {
+            print("BlockSelectionView projected cells: \(projectedCells)")
+        }
+        #endif
+        
+        // Update the shared projection coordinator
+        GridProjectionCoordinator.shared.projectedCells = projectedCells
+    }
+    
     private func handleDragEnd(value: DragGesture.Value, block: Block) {
+        // First clear the projection
+        GridProjectionCoordinator.shared.projectedCells = []
+        
         if GridView.validatePlacement(at: value.location) {
             withAnimation(.easeOut(duration: 0.2)) {
                 availableBlocks.removeAll { $0.id == block.id }
-                draggedBlockId = nil
+                
+                // Get new random block that's not currently shown
+                let remainingBlocks = Block.blocks.filter { b in
+                    !availableBlocks.contains(where: { $0.id == b.id })
+                }
+                
+                if let newBlock = remainingBlocks.randomElement() {
+                    availableBlocks.append(newBlock)
+                }
             }
             playHapticFeedback()
-        } else {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                draggedBlockId = nil
-            }
+        }
+        
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            draggedBlockId = nil
+            hoveredBlockId = nil
         }
         isDragging = false
         selectedBlock = nil
@@ -125,6 +211,21 @@ struct BlockSelectionView: View {
     private func playHapticFeedback() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
+    
+    // Add this new method for block generation
+    private func generateInitialBlocks() {
+        var newBlocks = Set<Block>()
+        let allBlocks = Block.blocks.filter { !usedBlocks.contains($0.id) }
+        
+        while newBlocks.count < visibleBlockCount && !allBlocks.isEmpty {
+            if let randomBlock = allBlocks.randomElement() {
+                newBlocks.insert(randomBlock)
+                usedBlocks.insert(randomBlock.id)
+            }
+        }
+        availableBlocks = Array(newBlocks)
+        replacementQueue = Block.blocks.filter { !newBlocks.contains($0) }
+    }
 }
 
 struct BlockItemView: View {
@@ -132,64 +233,61 @@ struct BlockItemView: View {
     let isSelected: Bool
     let isDragged: Bool
     let isHovered: Bool
+    let cellSize: CGFloat
+    let gridGeometry: GridGeometry
     let onHoverChanged: (Bool) -> Void
     let onDragChanged: (DragGesture.Value) -> Void
     let onDragEnded: (DragGesture.Value) -> Void
+    let namespace: Namespace.ID
     
     @State private var placeholderPhase = 0
     @State private var isAnimating = false
     
     var body: some View {
         ZStack {
-            // Placeholder animation with colored dotted lines
             if isDragged {
                 RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(
                         style: StrokeStyle(
-                            lineWidth: 2,
-                            dash: [6, 4],
+                            lineWidth: 3,
+                            dash: [8, 6],
                             dashPhase: CGFloat(placeholderPhase)
                         )
                     )
-                    .foregroundColor(Color(hex: "ACD1AF"))  // Sage green
-                    .frame(width: 60, height: 60)
+                    .foregroundColor(block.color.color)
+                    .frame(
+                        width: cellSize * CGFloat(block.shape[0].count),
+                        height: cellSize * CGFloat(block.shape.count)
+                    )
+                    .transition(.identity)
+                    .zIndex(2)
                     .onAppear {
-                        withAnimation(.linear.repeatForever(autoreverses: false)) {
-                            placeholderPhase += 24
+                        let baseAnimation = Animation.linear(duration: 1.5).repeatForever(autoreverses: false)
+                        withAnimation(baseAnimation) {
+                            placeholderPhase = 24
                         }
                     }
             }
             
-            // Main block with subtle float animation
-            if !isDragged {
-                BlockPreview(block: block, isSelected: isSelected)
-                    .scaleEffect(isHovered ? 1.05 : 1.0)
-                    .shadow(
-                        color: Color(hex: "ACD1AF").opacity(isHovered ? 0.3 : 0.1),
-                        radius: isHovered ? 3 : 1,
-                        x: 0,
-                        y: isHovered ? 2 : 1
-                    )
-                    .offset(y: isAnimating ? -1 : 0)
-                    .animation(
-                        Animation.easeInOut(duration: 1.5 + Double.random(in: 0...1))
-                            .repeatForever(autoreverses: true)
-                            .delay(Double.random(in: 0...1.5)),
-                        value: isAnimating
-                    )
-                    .onAppear {
-                        isAnimating = true
-                    }
-            }
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 12))
-        .onHover { hovering in
-            onHoverChanged(hovering)
+            BlockPreview(
+                block: block,
+                gridGeometry: gridGeometry,
+                isSelected: isSelected,
+                cellSize: cellSize,
+                namespace: namespace
+            )
+            .opacity(isDragged ? 0 : 1)
+            .animation(.easeInOut(duration: 0.2), value: isDragged)
+            .matchedGeometryEffect(id: "block-\(block.id)", in: namespace)
         }
         .gesture(
             DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                .onChanged(onDragChanged)
-                .onEnded(onDragEnded)
+                .onChanged { value in
+                    onDragChanged(value)
+                }
+                .onEnded { value in
+                    onDragEnded(value)
+                }
         )
     }
 }
@@ -214,7 +312,8 @@ struct BlockSelectionView_Previews: PreviewProvider {
             availableBlocks: .constant(Block.blocks),
             selectedBlock: .constant(nil),
             blockPosition: .constant(nil),
-            isDragging: .constant(false)
+            isDragging: .constant(false),
+            gridGeometry: .constant(GridGeometry(frame: CGRect(x: 0, y: 0, width: 100, height: 100), cellSize: 30))
         )
         .padding()
         .background(Color.black.opacity(0.1))

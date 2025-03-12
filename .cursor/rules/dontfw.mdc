@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+[CatFeatures.swift](mdc:TetheredSouls/TetheredSouls/Components/CatFeatures.swift)
+[NotionFace.swift](mdc:TetheredSouls/TetheredSouls/Components/NotionFace.swift)
+[HeartParticle.swift](mdc:TetheredSouls/TetheredSouls/Components/HeartParticle.swift)
+NEVER FUCK WITH THESE FEATURES> ENSURE ANY SOLUTION DOES NOT DERAIL THIS
+

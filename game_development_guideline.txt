@@ -1,0 +1,29 @@
+Game Concept and Design:
+- Choose a theme (e.g., wood)
+- Decide on grid size (e.g., 8x8 or 10x10)
+- Design various block shapes (e.g., T, L, J, squares)
+
+Gameplay Mechanics:
+- Implement drag-and-drop block placement
+- Allow row/column elimination
+- Develop a scoring system (block placements and eliminations)
+- Consider implementing a combo mode
+- Include a block holder grid for strategic placement
+
+User Interface and Experience:
+- Create an appealing and user-friendly interface
+- Incorporate sound effects (e.g., wood carving, elimination)
+- Ensure intuitive and easy-to-use controls
+
+Offline Play and No Time Limits:
+- Design for offline play
+- Remove time constraints for a relaxed gameplay environment
+
+In-App Purchases and Monetization:
+- Offer rotations as an in-app purchase
+- Provide an option to remove ads
+- Implement subscription options for unlimited access
+
+Regular Updates and New Content:
+- Continuously update with new block shapes
+- Consider adding new features or game modes 

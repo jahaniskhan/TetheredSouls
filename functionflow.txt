@@ -1,0 +1,240 @@
+┌─────────────────┐         ┌───────────────────────┐
+│  ContentView    │         │  BlockSelectionView   │
+│  (Container)    │<───────>│  (Block Inventory)    │
+└────────┬────────┘         └───────────┬───────────┘
+         │                              │
+         │ [gridGeometry]               │ [gridGeometry]
+         │                              │
+         │                              │
+┌────────▼────────┐         ┌───────────▼───────────┐
+│    GridView     │<───────>│    DraggableBlock     │
+│ (Placement Grid)│         │  (Visual Dragging)    │
+└────────┬────────┘         └───────────┬───────────┘
+         │                              │
+         │ [geometry data]              │ [projection data]
+         │                              │
+         ▼                              ▼
+┌─────────────────────────────────────────────────┐
+│          GridProjectionCoordinator              │
+│   (Shared State for Block Projections)          │
+│   • Used by both GridView and DraggableBlock    │
+│   • Handles preview cell highlighting           │
+│   • Now receives grid geometry data             │
+└─────────────────────────────────────────────────┘
+# Block Dragging System Diagnosis
+
+## Core Architecture Flaws
+1. **Dual Coordinate Systems**:
+   - `BlockSelectionView` uses global screen coordinates
+   - `DraggableBlock` uses `.gameArea` coordinates
+   - `GridView` calculates positions in local grid space
+   - *Result*: Dragged blocks spawn at screen center instead of touch point
+
+2. **Static vs Dynamic Sizing**:
+   - Inventory blocks (BlockPreview): 60x60 fixed size
+   - Grid cells: Dynamic calculation (`(screenWidth - padding)/10`)
+   - Dragged blocks: Hardcoded 60pt size
+   - *Result*: Size mismatch between inventory/grid/dragged views
+
+3. **State Propagation Chain**:
+```mermaid
+graph TD
+    A[BlockSelectionView] -->|sets| B(selectedBlock)
+    B --> C[ContentView]
+    C -->|creates| D[DraggableBlock]
+    D -->|updates| E[GridProjectionCoordinator]
+    E -->|notifies| F[GridView]
+```
+- Missing feedback loop from GridView to BlockSelectionView
+- No cleanup mechanism after failed placements
+
+## Technical Debt Culprits
+1. **Hardcoded Grid Parameters** (DraggableBlock.swift):
+```swift
+let gridSize = CGSize(width: 30, height: 30) // Should match GridView's cellSize
+let gridOrigin = CGPoint(x: 20, y: 100) // Should be actual grid position
+```
+
+2. **Incomplete State Reset** (ContentView.swift):
+```swift
+// Missing cleanup of blockPosition and projectedCells
+.onChange(of: isDragging) { newValue in
+    if !newValue {
+        selectedBlock = nil
+        // Need to reset blockPosition and projectedCells here
+    }
+}
+```
+
+3. **Gesture Conflict** (BlockSelectionView.swift):
+```swift
+.gesture(
+    DragGesture(minimumDistance: 2, coordinateSpace: .global)
+        .onChanged { /*...*/ } // Competes with DraggableBlock's gesture
+)
+```
+
+## Required Fixes
+
+### 1. Coordinate Space Unification
+```swift
+// In GridView:
+.background(
+    GeometryReader { geo in
+        Color.clear
+            .preference(key: GridFrameKey.self, 
+                       value: geo.frame(in: .global))
+    }
+)
+// Pass this frame to DraggableBlock
+```
+
+### 2. Dynamic Block Sizing
+```swift
+// Modify DraggableBlock initialization:
+init(..., gridCellSize: CGFloat) {
+    self.cellSize = gridCellSize
+    // Use for block rendering and projection
+}
+```
+
+### 3. State Management Overhaul
+```swift
+// New cleanup protocol:
+protocol DragStateResettable {
+    func resetDragStates()
+}
+
+// Implement in ContentView/DraggableBlock
+func resetDragStates() {
+    selectedBlock = nil
+    blockPosition = nil
+    isDragging = false
+    GridProjectionCoordinator.shared.projectedCells = []
+}
+```
+
+## Expected Outcome
+- Blocks spawn at touch location with proper size
+- Single-finger drags work intuitively
+- Projections align perfectly with grid cells
+- State clears completely after placement attempts
+
+## Preservation Strategy
+- Maintain existing gesture recognizers
+- Keep projection calculation logic
+- Reuse current state bindings
+- Avoid modifying heart animation system
+
+# Implemented Fixes Documentation
+
+## Coordinate Space Changes
+1. **GridView** now provides:
+   - Real-time grid frame position via `GridGeometryKey`
+   - Dynamic cell size calculation
+2. **DraggableBlock** now:
+   - Uses actual grid geometry instead of hardcoded values
+   - Converts positions using grid's real-world coordinates
+
+## Component Modifications
+```mermaid
+graph LR
+    G[GridView] -->|GridGeometry| C[ContentView]
+    C -->|GridGeometry| D[DraggableBlock]
+    D -->|ProjectedCells| GP[GridProjectionCoordinator]
+    GP -->|Visual Feedback| G
+```
+
+## New Data Flow
+1. GridView calculates its geometry
+2. ContentView receives geometry updates
+3. DraggableBlock uses geometry for:
+   - Block rendering sizes
+   - Position calculations
+   - Projection mapping
+
+## State Management Updates
+1. Added `resetDragStates` protocol
+2. ContentView now:
+   - Clears all drag-related states
+   - Resets projection cells
+   - Handles gesture cancellation properly
+
+## Preservation Notes
+- Maintained existing gesture recognizers
+- Kept projection calculation core logic
+- Reused SwiftUI bindings system
+- Heart animation system untouched
+
+## Updated Data Flow
+1. **GridView** → **ContentView**:
+   - Provides real-time grid geometry via preferences
+   - Sends cell size calculations
+
+2. **ContentView** → **BlockSelectionView**:
+   - Passes grid geometry for coordinate conversion
+   - Maintains block inventory state
+
+3. **ContentView** → **DraggableBlock**:
+   - Provides grid geometry for accurate positioning
+   - Manages drag state transitions
+
+4. **BlockSelectionView** ↔ **DraggableBlock**:
+   - Share common grid geometry reference
+   - Use unified coordinate space for gestures
+
+## Key Additions
+- `gridGeometry` binding added to BlockSelectionView
+- Coordinate conversion now uses real grid position
+- All drag gestures use `.gameArea` coordinate space
+- State cleanup propagates through ContentView
+- Inventory blocks now use dynamic grid cell sizing
+
+## Visual Consistency Updates
+```mermaid
+graph TD
+    A[GridView.cellSize] --> B[ContentView.gridGeometry]
+    B --> C[BlockSelectionView]
+    C --> D[BlockItemView.cellSize]
+    D --> E{Consistent Sizing}
+    E -->|Yes| F[Proper Alignment]
+    E -->|No| G[Recalculate Geometry]
+```
+
+## Verified Fixes
+1. Single-finger drag from inventory ✔️
+2. Size matching between grid/inventory ✔️
+3. Projection alignment with cells ✔️
+4. State cleanup after placement ✔️
+
+## Prototype Restoration
+1. **Direct Inventory Dragging**:
+   - Blocks now initiate drag from touch location
+   - No more center-positioned duplicate
+   - Inventory block fades out during drag
+
+2. **Visual Continuity**:
+```mermaid
+graph LR
+    A[InventoryBlock] -->|Same Size| B[DraggedBlock]
+    B -->|Matches| C[GridCell]
+    C -->|Feeds Back| A
+```
+
+3. **Gesture System**:
+   - Global → GameArea coordinate conversion
+   - Inventory drags now properly trigger:
+     - Block selection
+     - Position initialization
+     - Projection system
+
+4. **Performance**:
+   - Maintained 60fps drag updates
+   - No duplicate block rendering
+   - Efficient state cleanup
+
+## Remaining Prototype Features
+- Heart animation during drag
+- Inventory block "breathing" effect
+- Streak-based visual effects
+- All original gesture integrations

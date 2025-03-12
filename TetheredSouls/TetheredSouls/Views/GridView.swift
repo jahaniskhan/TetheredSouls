@@ -1,12 +1,47 @@
 import SwiftUI
 import CoreGraphics
 
+// Create a shared coordinator to handle projection
+class GridProjectionCoordinator: ObservableObject {
+    static let shared = GridProjectionCoordinator()
+    @Published var projectedCells: [(row: Int, column: Int)] = []
+    
+    // Add these properties to store grid geometry
+    var gridFrame: CGRect = .zero
+    var cellSize: CGFloat = 30
+    
+    private init() {}
+    
+    // Method to convert global coordinates to grid-relative
+    func convertToGridPosition(globalPosition: CGPoint) -> CGPoint {
+        return CGPoint(
+            x: globalPosition.x - gridFrame.origin.x,
+            y: globalPosition.y - gridFrame.origin.y
+        )
+    }
+    
+    // Method to calculate row and column from position
+    func calculateGridCell(at position: CGPoint) -> (row: Int, column: Int)? {
+        let relativePosition = convertToGridPosition(globalPosition: position)
+        
+        let row = Int(relativePosition.y / cellSize)
+        let column = Int(relativePosition.x / cellSize)
+        
+        // Check if within grid bounds
+        if row >= 0 && row < 10 && column >= 0 && column < 10 {
+            return (row, column)
+        }
+        return nil
+    }
+}
+
 struct GridView: View {
     @Binding var grid: [[Bool]]
     @Binding var selectedBlock: Block?
     @Binding var blockPosition: CGPoint?
     @Binding var isDragging: Bool
     @StateObject private var touchCoordinator = GridTouchCoordinator.shared
+    @ObservedObject private var projectionCoordinator = GridProjectionCoordinator.shared
     
     // Calculate cell size based on screen width
     private var cellSize: CGFloat {
@@ -22,16 +57,27 @@ struct GridView: View {
               GameStateManager.shared.availableBlocks.contains(where: { $0.id == block.id })
         else { return false }
         
-        return block.shape.enumerated().allSatisfy { (r, rows) in
-            rows.enumerated().allSatisfy { (c, cell) in
-                guard cell else { return true }
-                let newRow = row + r
-                let newCol = column + c
-                return self.grid.indices.contains(newRow) && 
-                       self.grid[newRow].indices.contains(newCol) &&
-                       !self.grid[newRow][newCol]
+        // Check if all cells required by the block can be placed
+        for blockRow in 0..<block.shape.count {
+            for blockCol in 0..<block.shape[blockRow].count {
+                if block.shape[blockRow][blockCol] {
+                    let gridRow = row + blockRow
+                    let gridCol = column + blockCol
+                    
+                    // Check bounds
+                    if gridRow < 0 || gridRow >= grid.count || gridCol < 0 || gridCol >= grid[0].count {
+                        return false
+                    }
+                    
+                    // Check if cell is already occupied
+                    if grid[gridRow][gridCol] {
+                        return false
+                    }
+                }
             }
         }
+        
+        return true
     }
     
     private func isDraggingOver(row: Int, column: Int) -> Bool {
@@ -99,28 +145,30 @@ struct GridView: View {
     // Update cell visual style to match image
     private func makeCell(row: Int, column: Int) -> some View {
         let isFilled = self.grid[row][column]
-        let isValidPlacement = self.canPlaceBlock(at: row, column: column)
+        let isInProjection = projectionCoordinator.projectedCells.contains { $0.row == row && $0.column == column }
+        let isValidPlacement = isInProjection && canPlaceBlock(at: row, column: column)
         
         return CellView(
             isOccupied: isFilled,
             row: row,
             column: column,
             selectedBlock: self.selectedBlock,
-            isPreview: self.isDragging && self.selectedBlock != nil
+            isPreview: self.isDragging && isInProjection
         )
         .frame(width: self.cellSize, height: self.cellSize)
         .background(
             ZStack {
-                if !isValidPlacement && isDragging {
-                    Color.red.opacity(0.05)  // Very subtle red for invalid placement
-                }
-                if self.isDraggingOver(row: row, column: column) {
-                    Color.gray.opacity(0.1)  // Very subtle highlight
+                if isDragging && isInProjection {
+                    Rectangle()
+                        .fill(isValidPlacement ? 
+                              Color.green.opacity(0.3) : 
+                              Color.red.opacity(0.3))
+                        .animation(.easeOut(duration: 0.2), value: isValidPlacement)
                 }
             }
         )
         .gesture(
-            DragGesture(minimumDistance: 0)
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
                     let location = value.location
                     self.blockPosition = location
@@ -194,6 +242,18 @@ struct GridView: View {
             .onTapGesture { location in
                 self.handleGridTap(location: location, geometry: geometry)
             }
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .preference(
+                            key: GridGeometryKey.self,
+                            value: GridGeometry(
+                                frame: geo.frame(in: .global),
+                                cellSize: self.cellSize
+                            )
+                        )
+                }
+            )
         }
     }
     
@@ -225,14 +285,19 @@ struct GridView: View {
     }
     
     static func validatePlacement(at position: CGPoint) -> Bool {
-        // Calculate cellSize directly since we can't access the instance property
-        let screenWidth = UIScreen.main.bounds.width
-        let availableWidth = screenWidth - (2 * Theme.Layout.padding)
-        let totalSpacing = Theme.Layout.gridSpacing * 9
-        let cellSize = max((availableWidth - totalSpacing) / 10, 30)
+        #if DEBUG
+        print("Validating placement at position: \(position)")
+        print("Grid frame in coordinator: \(GridProjectionCoordinator.shared.gridFrame)")
+        #endif
         
-        let column = Int((position.x / cellSize).rounded())
-        let row = Int((position.y / cellSize).rounded())
+        // Use coordinator to calculate grid cell
+        guard let (row, column) = GridProjectionCoordinator.shared.calculateGridCell(at: position) else {
+            return false
+        }
+        
+        #if DEBUG
+        print("Calculated grid cell: (\(row), \(column))")
+        #endif
         
         // Access grid through GameStateManager since we can't access the instance property
         let grid = GameStateManager.shared.grid
@@ -274,4 +339,16 @@ struct GridLines: Shape {
         
         return path
     }
+}
+
+struct GridGeometryKey: PreferenceKey {
+    static var defaultValue = GridGeometry(frame: .zero, cellSize: 30)
+    static func reduce(value: inout GridGeometry, nextValue: () -> GridGeometry) {
+        value = nextValue()
+    }
+}
+
+struct GridGeometry: Equatable {
+    let frame: CGRect
+    let cellSize: CGFloat
 }

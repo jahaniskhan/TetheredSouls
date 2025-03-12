@@ -1,0 +1,110 @@
+Core Game Elements:
+
+Grid System:
+- Android: 8x8 grid (64 cells)
+- iOS: 10x10 grid (100 cells)
+- Cells marked with wooden texture/pattern
+
+Block Specifications:
+1. Basic Blocks:
+   - 1x1 Square (■) - Basic unit
+   - 2x2 Square (2x2) - Covers 4 cells
+   - 3x3 L-Shape (⎣) - 3x3 dimensions with one empty row
+   - 4x1 Straight (━━) - Long vertical/horizontal block
+   - T-Shape (┳) - 3x3 with center protrusion
+   - Z-Shape (S-shaped) - 2x3 zigzag
+
+2. Special Blocks (Unlocked Later):
+   - Cross Shape (╋) - 3x3 center cross
+   - U-Shape (⊔) - 3x3 with hollow center
+   - Staircase Pattern - Alternating steps
+   - Diamond Shape - Rotated square pattern
+
+Block Properties:
+- Fixed orientation (no rotation allowed)
+- Cannot be flipped/mirrored
+- Color variations match wooden theme (oak, mahogany, pine textures)
+- Minimum block size: 1x1
+- Maximum block size: 4x4
+
+Scoring System:
+- Base Score per Placement: 10 points per block cell
+- Row/Column Elimination: 100 points per full line
+- Combo Multipliers:
+  • 2 consecutive eliminations: 1.5x
+  • 3 consecutive eliminations: 2x
+  • 4+ consecutive eliminations: 3x + screen shake effect
+- Bonus Scores:
+  • Perfect grid clear: 500 points
+  • Holder grid usage: +50 points per stored block
+
+Progression System:
+- Level-based difficulty ramp:
+  • First 10 levels: Basic shapes only
+  • Level 11-20: Introduce L/T shapes
+  • Level 21+: Complex composite shapes
+- Daily Challenges:
+  • Time-limited unique block sets
+  • Progressive difficulty scaling
+
+Special Features:
+1. Block Holder Grid:
+   - 3x3 temporary storage
+   - Can hold 1 block at a time
+   - Storage duration: 3 moves max
+   
+2. Combo System:
+   - Chain eliminations within 3 moves
+   - Visual feedback:
+     • Golden particle effects
+     • Wood cracking sounds
+     • Screen vibration (4+ combos)
+
+3. Currency System:
+   - Rotation Coins:
+     • 1 rotation = 1 coin
+     • Earned through:
+       - Every 1000 points = 1 coin
+       - Daily login bonus (3 coins)
+       - In-app purchases
+   - Keys (iOS):
+     • 100 keys = 8-12 rotation coins
+     • Earned via progress bar
+
+Technical Constraints:
+- Block generation algorithm:
+  • First 3 blocks: Solvable patterns
+  • Subsequent blocks: Random with difficulty scaling
+- Collision detection:
+  • Exact grid alignment required
+  • No partial overlaps allowed
+- Failure Condition:
+  • 3 consecutive unusable blocks
+  • Grid fill threshold: 85% capacity
+
+Monetization Elements:
+- Rotation Packages:
+  • 10 rotations: $0.99
+  • 100 rotations: $9.99
+  • 1000 rotations: $19.99
+- Subscription Tiers:
+  • Weekly: $1.99
+  • Monthly: $4.99
+  • Annual: $20.99
+- Ad Mechanics:
+  • Interstitial ads after every 2 games
+  • Reward ads for bonus rotations
+  • Non-intrusive banner ads
+
+Player Challenges:
+1. Strategic Block Placement:
+   - Balancing current vs future needs
+   - Holder grid timing optimization
+   
+2. Pattern Recognition:
+   - Anticipating upcoming block shapes
+   - Identifying emerging grid patterns
+
+3. Resource Management:
+   - Rotation coin expenditure strategy
+   - Key-to-coin conversion timing 

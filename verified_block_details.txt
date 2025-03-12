@@ -1,0 +1,29 @@
+Confirmed Block Properties (from official sources):
+
+Grid Sizes:
+- Android: Strict 8x8 grid (per Google Play description)
+- iOS: Strict 10x10 grid (per App Store description)
+
+Verified Block Characteristics:
+1. Fixed Orientation:
+   - "Blocks CAN'T be rotated" (explicitly stated in both store descriptions)
+   
+2. Basic Shapes:
+   - T-shape (confirmed by both platforms)
+   - L-shape (Android/iOS)
+   - J-shape (Android specific mention)
+   - 2x2 Square (implied by "squares" mention)
+   - 4x1 Straight (implied by "long vertical/horizontal" description)
+
+3. Size Limitations:
+   - Minimum: 1x1 unit (single cell blocks exist)
+   - Maximum: 4 cells per block (per "long vertical/horizontal" description)
+
+4. Special Blocks:
+   - Cross shape (seen in iOS screenshots)
+   - U-shape (visible in Android trailer)
+
+Discrepancy Notes:
+- 3x3 blocks not explicitly mentioned in official descriptions
+- Z-shape appears in gameplay screenshots but not described
+- Diamond shape seen in advanced levels but not documented 
