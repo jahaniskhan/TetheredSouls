@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+[DoodleType.swift](mdc:TetheredSouls/TetheredSouls/Models/DoodleType.swift)
+[DoodleElement.swift](mdc:TetheredSouls/TetheredSouls/Components/DoodleElement.swift)
+do not change the types of doodles 
+
+never change the xsmile
+or the semicolon

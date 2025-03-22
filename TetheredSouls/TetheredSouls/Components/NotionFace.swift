@@ -9,8 +9,20 @@
 import SwiftUI
 
 struct NotionFace: View {
-    // Move the environment property inside the view struct
+    // Keep for backward compatibility but don't use it
     @Environment(\.isDraggingBlock) private var isDraggingBlock
+    
+    // Add a state property to track the current gesture mode
+    @State private var currentGestureMode: GestureMode = .blockDragging
+    
+    // Add a state property to override the environment value when needed
+    @State private var forceEnableGestures = false
+    
+    // Add a property to track internal gesture state
+    @State private var internalGestureDisabled = false
+    
+    // Add a timer to automatically re-enable gestures after a timeout
+    @State private var safetyTimer: Timer? = nil
     
     // MARK: - State
     @State private var phase = 0.0
@@ -44,6 +56,9 @@ struct NotionFace: View {
     @State private var wakeUpPhase = 0
     @State private var sleepyMouthOffset: CGFloat = 0
     @State private var sleepyWhiskerRotation: Double = 0
+    
+    // Add a property to track active heart particles with both position and color
+    @State private var activeHeartParticles: [UUID: (position: CGPoint, color: Color)] = [:]
     
     // MARK: - Configuration
     struct Config {
@@ -152,14 +167,31 @@ struct NotionFace: View {
                     },
                     parentSize: geometry.size,
                     isSleeping: isSleeping,
-                    isBlinking: isBlinking
+                    isBlinking: isBlinking,
+                    // Use static mode in CAT interaction mode to completely avoid animation conflicts
+                    staticMode: currentGestureMode == .catInteraction
                 )
                 .frame(width: 90, height: 90)
                 .offset(x: -12, y: 25)
 
                 if showHeart {
-                    HeartParticle(color: .pink)
-                        .position(touchCoordinator.touchLocation ?? .zero)
+                    // Replace the single heart with multiple hearts using the activeHeartParticles dictionary
+                    ForEach(Array(activeHeartParticles.keys), id: \.self) { id in
+                        if let heartData = activeHeartParticles[id] {
+                            HeartParticle(color: heartData.color, id: id)
+                                .position(heartData.position)
+                                .onAppear {
+                                    // Remove the heart after animation completes
+                                    // Reduced from 1.2 to 0.8 seconds for much shorter visibility
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                        activeHeartParticles.removeValue(forKey: id)
+                                        if activeHeartParticles.isEmpty {
+                                            showHeart = false
+                                        }
+                                    }
+                                }
+                        }
+                    }
                 }
             }
             .onChange(of: touchCoordinator.touchLocation) { _, _ in
@@ -176,36 +208,253 @@ struct NotionFace: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        guard !isDraggingBlock else { return }
-                        handleHeartGesture(at: value.location)
+                        // Check the global gesture mode instead of environment values
+                        // Gestures are allowed if we're in cat interaction mode OR if force enabled
+                        let gesturesAllowed = currentGestureMode == .catInteraction || 
+                                             DragStateOverride.shared.forceDisableDragState || 
+                                             forceEnableGestures
+                        
+                        // Always allow cat eye movement regardless of mode
+                        // Update the touchCoordinator with the current touch location
+                        touchCoordinator.touchLocation = value.location
+                        
+                        // Reset idle timer when user interacts
+                        lastInteractionTime = Date()
+                        isIdle = false
+                        isSleeping = false
+                        
+                        // Only show hearts when in cat interaction mode or force enabled
+                        if gesturesAllowed {
+                            // Slight delay to prevent animation conflicts
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                handleHeartGesture(at: value.location)
+                            }
+                        }
+                        
+                        // Ensure touch location is reset after a delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            // Only reset if no new touches occurred
+                            if touchCoordinator.touchLocation == value.location {
+                                touchCoordinator.touchLocation = nil
+                            }
+                        }
                     }
             )
-        }
-        .onAppear {
-            // Check idle state every second
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            .onAppear {
+                // Set initial mode
+                currentGestureMode = GestureMode.current
+                
+                // Check idle state every second
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                    checkIdleState()
+                }
+            }
+            .onReceive(blinkTimer) { _ in
+                if !isSleeping {
+                    blink()
+                }
+            }
+            .onReceive(idleCheckTimer) { _ in
                 checkIdleState()
             }
-        }
-        .onReceive(blinkTimer) { _ in
-            if !isSleeping {
-                blink()
+            .onChange(of: touchCoordinator.touchLocation) { oldValue, newValue in
+                if newValue != nil {
+                    lastInteractionTime = Date()
+                    lastBlinkTime = Date()  // Reset blink timer on interaction
+                    isIdle = false
+                    isSleeping = false
+                    isBlinking = false // Reset blink state on interaction
+                }
             }
-        }
-        .onReceive(idleCheckTimer) { _ in
-            checkIdleState()
-        }
-        .onChange(of: touchCoordinator.touchLocation) { oldValue, newValue in
-            if newValue != nil {
-                lastInteractionTime = Date()
-                lastBlinkTime = Date()  // Reset blink timer on interaction
+            .onReceive(NotificationCenter.default.publisher(for: .resetIdleTimer)) { _ in
+                updateInteraction()
+            }
+            // Add listener for our special notification
+            .onReceive(NotificationCenter.default.publisher(for: .init("ForceEnableNotionFaceGestures"))) { _ in
+                print("⚠️ Forcing NotionFace gestures to be enabled regardless of environment state")
+                
+                // Cancel any existing timer
+                safetyTimer?.invalidate()
+                
+                // Set override and reset internal state
+                forceEnableGestures = true
+                internalGestureDisabled = false
                 isIdle = false
                 isSleeping = false
-                isBlinking = false // Reset blink state on interaction
+                mood = .normal
+                
+                // Schedule a longer timeout for safety
+                safetyTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { _ in
+                    // Even after timeout, check if we should actually disable
+                    if !DragStateOverride.shared.forceDisableDragState {
+                        forceEnableGestures = false
+                    }
+                }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .resetIdleTimer)) { _ in
-            updateInteraction()
+            
+            // Add a periodic check to re-enable gestures if they've been off too long
+            .onReceive(Timer.publish(every: 10, on: .main, in: .common).autoconnect()) { _ in
+                // If gestures have been disabled for over 10 seconds, consider re-enabling
+                if internalGestureDisabled {
+                    forceEnableGestures = true
+                    internalGestureDisabled = false
+                    print("🕒 Auto-enabling NotionFace gestures after timeout")
+                }
+            }
+            
+            // Add listener for mode changes
+            .onReceive(NotificationCenter.default.publisher(for: .init("GestureModeChanged"))) { notification in
+                if let mode = notification.object as? GestureMode {
+                    currentGestureMode = mode
+                    
+                    // If switching to cat mode, force reset cat state
+                    if mode == .catInteraction {
+                        isIdle = false
+                        isSleeping = false
+                        mood = .normal
+                    }
+                }
+            }
+            
+            // Add listener for animation cancellation
+            .onReceive(NotificationCenter.default.publisher(for: .init("CancelAllAnimations"))) { _ in
+                print("⚡️ NotionFace - Cancelling all animations")
+                
+                // Immediately stop and reset any ongoing animations
+                withAnimation(.linear(duration: 0.01)) {
+                    // Reset all animatable state
+                    orbitAngle = -.pi/2
+                    showHeart = false
+                    breathingScale = 1.0
+                    isBlinking = false
+                    phase = 0.0
+                    
+                    // Reset all behavioral state
+                    isIdle = false
+                    isSleeping = false
+                    isWakingUp = false
+                    wakeUpPhase = 0
+                    
+                    // Set to normal mood
+                    mood = .normal
+                }
+                
+                // Force enable gestures
+                forceEnableGestures = true
+                internalGestureDisabled = false
+            }
+            
+            // CRITICAL: Add fast timer to check direct controller state
+            .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
+                if DirectCatEyeControl.shared.isDragging {
+                    // Immediately force mood to curious when dragging
+                    if mood != .curious {
+                        mood = .curious
+                        
+                        // Debug
+                        #if DEBUG
+                        print("🐱 NotionFace DIRECT SET to curious via controller")
+                        #endif
+                    }
+                } else {
+                    // Only reset mood if it was curious from dragging
+                    if mood == .curious {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            mood = .normal
+                        }
+                    }
+                }
+            }
+            
+            // Add listener for heart particle generation
+            .onReceive(NotificationCenter.default.publisher(for: .generateHeartParticle)) { notification in
+                // Handle the heart particle request
+                if let userInfo = notification.userInfo as? [String: Any],
+                   let location = userInfo["location"] as? CGPoint {
+                    // Generate heart particles at the given location
+                    handleHeartGesture(at: location)
+                    
+                    // Ensure we update interaction state
+                    updateInteraction()
+                }
+            }
+            
+            // Add listener for block dragging
+            .onReceive(NotificationCenter.default.publisher(for: .init("BlockDragging"))) { notification in
+                // CRITICAL: Force the cat's mood to curious immediately
+                mood = .curious
+                
+                // CRITICAL: Force the GameStateManager to reflect dragging
+                GameStateManager.shared.isDragging = true
+                
+                // Update interaction state to prevent sleeping
+                updateInteraction()
+                
+                // Update touch location from notification if available
+                if let userInfo = notification.userInfo as? [String: Any],
+                   let position = userInfo["position"] as? CGPoint {
+                    // Force update touch coordinator with block position
+                    touchCoordinator.touchLocation = position
+                    
+                    // Update other state variables
+                    lastInteractionTime = Date()
+                    lastBlinkTime = Date() 
+                    isIdle = false
+                    isSleeping = false
+                    
+                    #if DEBUG
+                    print("😺 NotionFace DRAGGING at: \(Int(position.x)), \(Int(position.y))")
+                    print("😺 GameStateManager.isDragging = \(GameStateManager.shared.isDragging)")
+                    #endif
+                }
+            }
+            
+            // Add listener for block dragging ended
+            .onReceive(NotificationCenter.default.publisher(for: .init("BlockDraggingEnded"))) { _ in
+                // Don't reset mood immediately - wait for the eye movement to finish
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    // Reset mood after block dragging ends with animation
+                    if mood == .curious {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            mood = .normal
+                        }
+                    }
+                }
+            }
+            
+            // DIRECT CONTROL: Listen for forced eye frame changes
+            .onReceive(NotificationCenter.default.publisher(for: .init("ForceCatEyeFrame"))) { notification in
+                // Only change mood if we're actually dragging
+                if let userInfo = notification.userInfo as? [String: Any],
+                   let isDragging = userInfo["isDragging"] as? Bool {
+                    
+                    if isDragging {
+                        // Force mood to curious immediately when eyes are forced down
+                        mood = .curious
+                        
+                        // Ensure the cat stays awake
+                        if isSleeping {
+                            wakeUp()
+                        }
+                        isIdle = false
+                        
+                        DispatchQueue.main.async {
+                            #if DEBUG
+                            print("😺 NOTIONFACE MOOD FORCED TO CURIOUS FOR DRAGGING")
+                            #endif
+                        }
+                    } else {
+                        // Return to normal mood when not dragging
+                        mood = .normal
+                        
+                        DispatchQueue.main.async {
+                            #if DEBUG
+                            print("😺 NOTIONFACE MOOD RESET TO NORMAL")
+                            #endif
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -284,7 +533,79 @@ struct NotionFace: View {
     }
     
     private func handleHeartGesture(at location: CGPoint) {
-        // Existing heart gesture logic
+        // Only show hearts in cat interaction mode
+        if currentGestureMode == .catInteraction || forceEnableGestures || DragStateOverride.shared.forceDisableDragState {
+            // Array of vibrant heart colors
+            let heartColors: [Color] = [
+                .pink,
+                .red,
+                Color(red: 1.0, green: 0.5, blue: 0.7), // Light pink
+                Color(red: 0.9, green: 0.2, blue: 0.3), // Crimson
+                Color(red: 1.0, green: 0.4, blue: 0.4)  // Coral-ish
+            ]
+            
+            // Create multiple hearts in a burst pattern for more impact
+            for i in 0..<5 {
+                // Generate a unique ID for each heart
+        let heartId = UUID()
+        
+                // Add slight randomization to positions for a natural burst effect
+                let randomX = CGFloat.random(in: -15...15)
+                let randomY = CGFloat.random(in: -15...15)
+                let heartPosition = CGPoint(
+                    x: location.x + randomX,
+                    y: location.y + randomY
+                )
+                
+                // Use a different color for each heart
+                let heartColor = heartColors[i % heartColors.count]
+                
+                // Add this heart to the active particles with position and color
+                activeHeartParticles[heartId] = (position: heartPosition, color: heartColor)
+                
+                // Add a delay between some hearts for more natural bursting
+                if i > 0 {
+                    // Reduced delay from 0.03 to 0.02 for even faster burst effect
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.02) {
+                        let delayedHeartId = UUID()
+                        let offsetX = randomX + CGFloat.random(in: -10...10)
+                        let offsetY = randomY + CGFloat.random(in: -10...10)
+                        let offsetPosition = CGPoint(
+                            x: location.x + offsetX,
+                            y: location.y + offsetY
+                        )
+                        
+                        // Add a slightly delayed heart
+                        self.activeHeartParticles[delayedHeartId] = (position: offsetPosition, color: heartColor)
+                    }
+                }
+            }
+        
+        // Ensure the showHeart flag is on
+        if !showHeart {
+            showHeart = true
+        }
+        
+        // Set mood to loving when heart is shown
+        if mood != .loving {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                mood = .loving
+            }
+        }
+        
+        // Reset mood after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if mood == .loving {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    mood = .normal
+                }
+            }
+        }
+        
+            // Provide haptic feedback for the heart gesture - use medium for more noticeable feedback
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred(intensity: 0.8)
+        }
     }
 }
 

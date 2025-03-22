@@ -95,6 +95,8 @@ struct GamePanel: View {
     @State private var dragOffset = CGSize.zero
     @State private var isDragging = false
     
+    @State private var catEyesClosed = false
+    
     struct BackgroundStamp: Identifiable {
         let id = UUID()
         let type: StickerType
@@ -138,14 +140,65 @@ struct GamePanel: View {
                                 .frame(width: 85)
                                 .colorMultiply(Color(red: 99/255, green: 32/255, blue: 27/255))
                                 .opacity(0.95)
+                                .offset(y: 15)
                             
-                            NotionFace()
-                                .frame(width: 65)
-                                .offset(y: 8)
-                                .environmentObject(notionFaceRef)
+                            if catEyesClosed {
+                                Image("justMouth")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 65)
+                                    .offset(y: -1)
+                                    .offset(x: 0.5)
+                            } else {
+                                NotionFace()
+                                    .frame(width: 65)
+                                    .offset(y: -1)
+                                    .offset(x: 0.5)
+                                    .environmentObject(notionFaceRef)
+                            }
                         }
                         .modifier(WobbleAnimation(isEnabled: true))
-                        .padding(.top, -12)
+                        .padding(.top, -8)
+                        .onTapGesture {
+                            // Force the gesture mode to .catInteraction
+                            GestureMode.current = .catInteraction
+                            
+                            // Force disable drag state to allow heart animations
+                            DragStateOverride.shared.forceDisableDragState = true
+                            
+                            // Close eyes and show hearts
+                            catEyesClosed = true
+                            
+                            // Create hearts directly using all available methods
+                            createHeartEffectDirect()
+                            
+                            // Post directly to NotionFace for hearts
+                            NotificationCenter.default.post(
+                                name: .generateHeartParticle,
+                                object: nil,
+                                userInfo: ["position": CGPoint(x: 40, y: 40)]
+                            )
+                            
+                            // Update mood
+                            notionFaceRef.updateMood(.loving)
+                            
+                            // Add stronger haptic feedback
+                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            generator.impactOccurred(intensity: 0.8)
+                            
+                            // Reopen eyes and reset gesture state after a short delay
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    catEyesClosed = false
+                                    
+                                    // Reset the gesture mode back to default after animation
+                                    GestureMode.current = .blockDragging
+                                    
+                                    // Reset drag state override
+                                    DragStateOverride.shared.forceDisableDragState = false
+                                }
+                            }
+                        }
                         
                         // Only one set of streak frames
                         HStack(spacing: frameSpacing) {
@@ -281,7 +334,7 @@ struct GamePanel: View {
                 }
                 */
             }
-            .onReceive(NotificationCenter.default.publisher(for: .init("BlockPlaced"))) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name.blockPlaced)) { notification in
                 guard let position = notification.userInfo?["position"] as? CGPoint,
                       let blockType = notification.userInfo?["blockType"] as? String else { return }
                 
@@ -496,6 +549,82 @@ struct GamePanel: View {
         
         let variations: [CatMood] = [.normal, .playful, .sleepy]
         return [baseMood, variations.randomElement()!].randomElement()!
+    }
+    
+    private func createHeartEffect() {
+        // Get the cat's position within the panel
+        let catPosition = CGPoint(x: 40, y: 40) // Center of cat face approximation
+        
+        // Create multiple hearts
+        for _ in 0..<5 {
+            // Generate a random position around the cat
+            let position = CGPoint(
+                x: catPosition.x + CGFloat.random(in: -15...15),
+                y: catPosition.y + CGFloat.random(in: -15...15)
+            )
+            
+            // Use the existing notification that's already handled by the game
+            NotificationCenter.default.post(
+                name: .generateHeartParticle, // Use the system's existing notification name
+                object: nil,
+                userInfo: ["position": position]
+            )
+        }
+        
+        // Also reset the idle timer and notify about interaction
+        NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+    }
+    
+    private func createHeartEffectDirect() {
+        // Get the cat's position within the panel
+        let catPosition = CGPoint(x: 40, y: 40)
+        
+        // Create multiple hearts using all notification approaches
+        for i in 0..<5 {
+            // Generate random position around the cat
+            let randomOffset = CGFloat.random(in: -5...15)
+            let position = CGPoint(
+                x: catPosition.x + randomOffset,
+                y: catPosition.y + CGFloat.random(in: -10...10)
+            )
+            
+            // 1. Use the standard notification
+            NotificationCenter.default.post(
+                name: .generateHeartParticle,
+                object: nil,
+                userInfo: ["position": position]
+            )
+            
+            // 2. Also post a direct heart creation notification
+            NotificationCenter.default.post(
+                name: Notification.Name("CreateHeart"),
+                object: nil,
+                userInfo: [
+                    "position": position,
+                    "delay": Double(i) * 0.05
+                ]
+            )
+            
+            // 3. Post to the background effect system
+            NotificationCenter.default.post(
+                name: Notification.Name("SpawnEffect"),
+                object: nil,
+                userInfo: [
+                    "type": "heart",
+                    "position": position
+                ]
+            )
+        }
+        
+        // 4. Force alert all systems about interaction
+        NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
+        NotificationCenter.default.post(name: Notification.Name("CatInteraction"), object: nil)
+        
+        // 5. Add a direct notification to wake up the cat (if needed)
+        NotificationCenter.default.post(
+            name: Notification.Name("WakeCat"),
+            object: nil
+        )
     }
 }
 

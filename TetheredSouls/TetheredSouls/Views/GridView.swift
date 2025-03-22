@@ -94,30 +94,42 @@ struct GridView: View {
     }
     
     private func placeBlock(at row: Int, column: Int) {
-        guard let block = self.selectedBlock else { return }
+        guard let block = selectedBlock else { return }
         
-        var newGrid = self.grid
-        for (r, rows) in block.shape.enumerated() {
-            for (c, cell) in rows.enumerated() {
-                if cell {
-                    let newRow = (row + r).clamped(to: 0..<self.grid.count)
-                    let newCol = (column + c).clamped(to: 0..<self.grid[0].count)
-                    newGrid[newRow][newCol] = true
+        // Place the block in the grid
+        for (r, blockRow) in block.shape.enumerated() {
+            for (c, isSet) in blockRow.enumerated() {
+                if isSet {
+                    let gridRow = row + r
+                    let gridCol = column + c
+                    if gridRow < grid.count && gridCol < grid[0].count {
+                        grid[gridRow][gridCol] = true
+                    }
                 }
             }
         }
         
-        self.grid = newGrid
-        self.checkForCompletedRows()
-        
-        // Wake the cat
-        NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
-        
-        DispatchQueue.main.async {
-            self.selectedBlock = nil
-            self.isDragging = false
-            self.blockPosition = nil
+        // After placing block, trigger animation - use withAnimation to make it smoother
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            // Update the streak directly - this triggers the doodle animations
+            GameStateManager.shared.currentStreak += 1
+            
+            // Add haptic feedback for placement
+            HapticManager.triggerPlacementFeedback()
+            
+            // Notify about block placement for doodle animations
+            NotificationCenter.default.post(
+                name: Notification.Name.blockPlaced, 
+                object: nil, 
+                userInfo: [
+                    "position": CGPoint(x: column, y: row),
+                    "blockType": block.symbol
+                ]
+            )
         }
+        
+        // Check for completed rows
+        checkForCompletedRows()
     }
     
     func checkForCompletedRows() {
@@ -174,6 +186,9 @@ struct GridView: View {
                     self.blockPosition = location
                     self.isDragging = true
                     
+                    // Update touch location for cat eye tracking
+                    self.touchCoordinator.touchLocation = location
+                    
                     let column = Int((location.x / self.cellSize).rounded(.down))
                     let row = Int((location.y / self.cellSize).rounded(.down))
                     
@@ -193,6 +208,11 @@ struct GridView: View {
                     self.isDragging = false
                     self.blockPosition = nil
                     self.selectedBlock = nil
+                    
+                    // Keep touch visible for a moment before resetting
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.touchCoordinator.touchLocation = nil
+                    }
                 }
         )
     }
@@ -240,7 +260,10 @@ struct GridView: View {
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
             .contentShape(Rectangle())
             .onTapGesture { location in
-                self.handleGridTap(location: location, geometry: geometry)
+                // Don't process tap if we're in the middle of a drag operation
+                if !self.isDragging {
+                    self.handleGridTap(location: location, geometry: geometry)
+                }
             }
             .background(
                 GeometryReader { geo in
@@ -272,16 +295,57 @@ struct GridView: View {
         print("Grid frame: \(gridFrame)")
         #endif
         
-        let gridLocation = CGPoint(
+        // Use underscore for unused variable to avoid warning
+        _ = CGPoint(
             x: location.x - gridFrame.minX,
             y: location.y - gridFrame.minY
         )
         
-        self.touchCoordinator.touchLocation = gridLocation
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            self.touchCoordinator.touchLocation = nil
+        // Convert to global coordinates for cat eye tracking
+        if let globalPosition = getGlobalPosition(for: location, in: geometry) {
+            self.touchCoordinator.touchLocation = globalPosition
+            
+            // Store current gesture mode
+            let currentMode = GestureMode.current
+            
+            // Temporarily switch to cat interaction mode
+            GestureMode.current = .catInteraction
+            
+            // Notify everyone about the mode change
+            NotificationCenter.default.post(
+                name: .init("GestureModeChanged"),
+                object: GestureMode.catInteraction
+            )
+            
+            // Reset the mode after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Only reset if no drag started
+                if !self.isDragging {
+                    GestureMode.current = currentMode
+                    
+                    // Reset touch location if it hasn't been updated
+                    self.touchCoordinator.touchLocation = nil
+                    
+                    // Notify everyone about the mode change back
+                    NotificationCenter.default.post(
+                        name: .init("GestureModeChanged"),
+                        object: currentMode
+                    )
+                }
+            }
         }
+    }
+    
+    // Helper to convert to global coordinates
+    private func getGlobalPosition(for point: CGPoint, in geometry: GeometryProxy) -> CGPoint? {
+        // Get the grid's global frame
+        let globalFrame = geometry.frame(in: .global)
+        
+        // Convert the local point to global coordinates
+        return CGPoint(
+            x: globalFrame.minX + point.x,
+            y: globalFrame.minY + point.y
+        )
     }
     
     static func validatePlacement(at position: CGPoint) -> Bool {

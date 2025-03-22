@@ -83,6 +83,11 @@ struct Block: Identifiable, Equatable, Hashable {
     private static func generateRotations(_ shape: [[Bool]]) -> [[[Bool]]] {
         return [shape]
     }
+
+    // Add a static method to create a random block
+    static func createRandom() -> Block {
+        return blocks.randomElement() ?? blocks[0]
+    }
 }
 
 struct GameBlock: Identifiable {

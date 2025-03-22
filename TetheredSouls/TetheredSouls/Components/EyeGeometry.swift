@@ -123,6 +123,50 @@ struct EyeGeometry {
         return clampedFrame
     }
     
+    // New method specifically for block dragging with downward-biased eye positions
+    static func calculateBlockSpectatingFrame(
+        blockPosition: CGPoint,
+        eyeCenter: CGPoint,
+        screenHeight: CGFloat,
+        totalFrames: Int,
+        defaultFrame: Int = 13
+    ) -> Int {
+        // Instead of using complex angle calculations, we'll use a simpler grid-based approach
+        // Divide the screen into three regions: left, center, and right
+        
+        // First determine horizontal direction (left, center, right)
+        let screenWidth = UIScreen.main.bounds.width
+        let screenLeftZone = screenWidth * 0.4
+        let screenRightZone = screenWidth * 0.6
+        
+        var targetFrame: Int
+        
+        if blockPosition.x < screenLeftZone {
+            // Looking DOWN-RIGHT when on left side
+            targetFrame = 20
+            
+            #if DEBUG
+            print("👀 Cat EYE FRAME: \(targetFrame) (DOWN-RIGHT) for block at \(Int(blockPosition.x)), \(Int(blockPosition.y))")
+            #endif
+        } else if blockPosition.x > screenRightZone {
+            // Looking DOWN-LEFT when on right side
+            targetFrame = 5
+            
+            #if DEBUG
+            print("👀 Cat EYE FRAME: \(targetFrame) (DOWN-LEFT) for block at \(Int(blockPosition.x)), \(Int(blockPosition.y))")
+            #endif
+        } else {
+            // Keep center-down the same
+            targetFrame = 2
+            
+            #if DEBUG
+            print("👀 Cat EYE FRAME: \(targetFrame) (DOWN-CENTER) for block at \(Int(blockPosition.x)), \(Int(blockPosition.y))")
+            #endif
+        }
+        
+        return targetFrame
+    }
+    
     static func debugTouchInfo(location: CGPoint?, parentSize: CGSize) {
         guard let touch = location else { return }
         #if DEBUG

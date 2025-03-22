@@ -1,0 +1,160 @@
+┌─────────────────┐         ┌───────────────────────┐
+│  ContentView    │         │  BlockSelectionView   │
+│  (Container)    │<───────>│  (Block Inventory)    │
+└────────┬────────┘         └───────────┬───────────┘
+         │                              │
+         │ [gridGeometry]               │ [gridGeometry]
+         │                              │
+         │                              │
+┌────────▼────────┐         ┌───────────▼───────────┐
+│    GridView     │<───────>│    DraggableBlock     │
+│ (Placement Grid)│         │  (Visual Dragging)    │
+└────────┬────────┘         └───────────┬───────────┘
+         │                              │
+         │ [geometry data]              │ [projection data]
+         │                              │
+         ▼                              ▼
+┌─────────────────────────────────────────────────┐
+│          GridProjectionCoordinator              │
+│   (Shared State for Block Projections)          │
+│                                                 │
+└─────────────────────────────┬───────────────────┘
+                              │
+                              │ [dragging state]
+                              ▼
+┌─────────────────────────────────────────────────┐
+│          DirectCatEyeControl                    │
+│   (Cat Eye Positioning During Dragging)         │
+│                                                 │
+└─────────────────────────────┬───────────────────┘
+                              │
+                              │ [eye frame & mood]
+                              ▼
+┌─────────────────────────────────────────────────┐
+│          NotionFace / CatFeatures               │
+│   (Cat Visual Rendering & Animations)           │
+│                                                 │
+└─────────────────────────────────────────────────┘
+graph TD
+    A[DraggableBlock] -->|isDragging=true| B(DirectCatEyeControl)
+    B -->|currentEyeFrame=13| C[NotionFace]
+    C -->|mood=curious| D[CatFeatures]
+    D -->|Custom Eye Rendering| E[Cat looks down at grid]
+    F[User Touch] -->|touchLocation| G[GridTouchCoordinator]
+    G -->|touchLocation| C
+    C -->|mood=loving| H[Heart Animation]
+
+    <think>The user is asking me to update the function flow diagram in a new text file called "Codebase". This looks like they want me to create an updated version of the function flow documentation based on the current state of the codebase.
+
+Since I don't have access to tools right now, I'll need to create an updated version of the function flow diagram based on the information I already have from the existing functionflow.txt file and what I've learned about the codebase from our previous interactions.
+
+I'll need to:
+1. Create an updated version of the function flow diagram
+2. Add an overall goal section that describes the purpose of the codebase
+3. Format it in a way that's clear and easy to understand
+
+Let me look at the existing functionflow.txt to see what needs to be updated based on our recent changes.</think># Updated Function Flow - TetheredSouls Codebase
+
+## Overall Goal
+TetheredSouls is an interactive iOS game that combines block-placement mechanics with a responsive cat character. The goal is to create an engaging user experience where:
+
+1. Users can drag and place blocks in a grid
+2. A responsive cat character reacts to user interactions
+3. The cat provides visual feedback by looking at where the user is interacting
+4. During block dragging, the cat's eyes specifically look downward to follow the grid
+5. Different moods affect the cat's appearance (curious, excited, loving)
+6. Direct touches on the cat generate heart animations and mood changes
+
+The code is structured to maintain separation of concerns while ensuring smooth state coordination between components.
+
+## Core System Architecture
+```
+┌─────────────────┐         ┌───────────────────────┐
+│  ContentView    │         │  BlockSelectionView   │
+│  (Container)    │<───────>│  (Block Inventory)    │
+└────────┬────────┘         └───────────┬───────────┘
+         │                              │
+         │ [gridGeometry]               │ [gridGeometry]
+         │                              │
+         │                              │
+┌────────▼────────┐         ┌───────────▼───────────┐
+│    GridView     │<───────>│    DraggableBlock     │
+│ (Placement Grid)│         │  (Visual Dragging)    │
+└────────┬────────┘         └───────────┬───────────┘
+         │                              │
+         │ [geometry data]              │ [projection data]
+         │                              │
+         ▼                              ▼
+┌─────────────────────────────────────────────────┐
+│          GridProjectionCoordinator              │
+│   (Shared State for Block Projections)          │
+│                                                 │
+└─────────────────────────────┬───────────────────┘
+                              │
+                              │ [dragging state]
+                              ▼
+┌─────────────────────────────────────────────────┐
+│          DirectCatEyeControl                    │
+│   (Cat Eye Positioning During Dragging)         │
+│                                                 │
+└─────────────────────────────┬───────────────────┘
+                              │
+                              │ [eye frame & mood]
+                              ▼
+┌─────────────────────────────────────────────────┐
+│          NotionFace / CatFeatures               │
+│   (Cat Visual Rendering & Animations)           │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+## State Management Flow
+```mermaid
+graph TD
+    A[DraggableBlock] -->|isDragging=true| B(DirectCatEyeControl)
+    B -->|currentEyeFrame=13| C[NotionFace]
+    C -->|mood=curious| D[CatFeatures]
+    D -->|Custom Eye Rendering| E[Cat looks down at grid]
+    F[User Touch] -->|touchLocation| G[GridTouchCoordinator]
+    G -->|touchLocation| C
+    C -->|mood=loving| H[Heart Animation]
+```
+
+## Key State Controllers
+1. **GameStateManager**: Singleton that manages high-level game state
+2. **DirectCatEyeControl**: Controls cat eye position during block dragging
+3. **GridTouchCoordinator**: Tracks touch positions for grid and cat interactions
+4. **GridProjectionCoordinator**: Manages block projection on the grid
+
+## Recent Improvements
+1. **Improved Cat Eye Behavior**:
+   - Custom rendering path for eyes during dragging
+   - Eyes position offset to clearly look downward (+3px)
+   - Preserved mood-based scaling for consistency
+   - Eyes now clearly track down to the grid during dragging
+
+2. **Resolved Build Issues**:
+   - Eliminated duplicate GameStateManager declarations
+   - Fixed syntax issues in CatFeatures.swift
+   - Ensured proper scope for private methods
+
+3. **Enhanced User Feedback**:
+   - More responsive eye tracking
+   - Consistent mood changes during interactions
+   - Fixed dragging state coordination
+
+## Current Focus Areas
+1. Ensure reliable eye position during block dragging
+2. Maintain separation between mood effects and positioning
+3. Clean architecture for state propagation
+4. Consistent coordinate spaces across components
+5. Reliable gesture handling between cat and block interactions
+
+## Code Architecture Summary
+- **View Layer**: ContentView, GridView, BlockSelectionView
+- **Interaction Layer**: DraggableBlock, CatFeatures
+- **State Management**: GameStateManager, DirectCatEyeControl
+- **Coordination**: GridProjectionCoordinator, GridTouchCoordinator
+- **Animation**: NotionFace, CatFeatures, Particle Systems
+
+

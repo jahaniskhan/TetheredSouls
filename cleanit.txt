@@ -1,0 +1,527 @@
+# TetheredSouls Developer Documentation Guide
+
+## Table of Contents
+1. [Block Model](#1-block-model)
+2. [BlockView Component](#2-blockview-component)
+3. [DraggableBlock Component](#3-draggableblock-component)
+4. [BlockPreview Component](#4-blockpreview-component)
+5. [DoodleType System](#5-doodletype-system)
+6. [DoodleElement Component](#6-doodleelement-component)
+7. [Block Selection System](#7-block-selection-system)
+8. [Game Interaction Modes](#8-game-interaction-modes)
+9. [Doodle Position Management](#9-doodle-position-management)
+10. [ContentView Architecture](#10-contentview-architecture)
+11. [Component Interactions](#11-component-interactions)
+12. [Performance Optimizations](#12-performance-optimizations)
+13. [State Management Patterns](#13-state-management-patterns)
+
+## 1. Block Model
+`Block.swift` defines the core game element used for gameplay.
+
+### Key Properties
+- `id: UUID` - Unique identifier for each block instance
+- `shape: [[Bool]]` - 2D array representing the block's shape (true = filled cell, false = empty)
+- `color: BlockColor` - The color of the block (enum with predefined colors from Theme)
+- `rotationStates: [[[Bool]]]` - Precomputed rotations of the block (0°, 90°, 180°, 270°)
+- `symbol: String` - String identifier for the block, used for accessibility and debugging
+
+### Initialization
+```swift
+init(shape: [[Bool]], color: BlockColor, symbol: String, id: UUID = UUID())
+```
+- Creates a new block with the specified shape, color, and symbol
+- Automatically computes rotational variants (0°, 90°, 180°, 270°)
+- Always generates a unique ID when not explicitly provided
+- Uses static rotation helper to ensure initialization completes properly
+
+### Static Methods
+```swift
+static func rotateMatrix(_ matrix: [[Bool]]) -> [[Bool]]
+```
+- Rotates a shape matrix 90 degrees clockwise
+- Used internally during initialization
+- Must be static to avoid using partially initialized `self` during initialization
+
+```swift
+static func createRandom() -> Block
+```
+- Creates a random block by selecting one from predefined templates
+- Ensures each instance has a unique ID
+- Used by ContentView for generating initial blocks and replacements
+
+### Static Properties
+```swift
+static let blocks: [Block]
+```
+- Array of predefined block templates used throughout the game
+- Source for random block generation and replacement
+
+## 2. BlockView Component
+`BlockView.swift` provides a simple visual representation of a block.
+
+### Key Properties
+- `block: Block` - The block to display
+
+### Rendering Logic
+- Iterates through the block's shape matrix
+- Renders filled cells as rounded rectangles with the block's color
+- Uses a standard cell size of 30x30 points
+- Arranges cells in a grid pattern matching the block's shape
+
+### Usage Scenarios
+- Used primarily for static display of blocks
+- Rendered with proper alignment based on block shape dimensions
+- Simplifies the visualization of different block types in various contexts
+- Doesn't have interactive capabilities (those are in DraggableBlock)
+
+## 3. DraggableBlock Component
+`DraggableBlock.swift` handles the interactive dragging of blocks.
+
+### Key Properties
+- `selectedBlock: Binding<Block?>` - Currently selected block
+- `isDragging: Binding<Bool>` - Tracks whether a drag operation is in progress
+- `blockPosition: Binding<CGPoint?>` - Current position of the dragged block
+- `grid: Binding<[[Bool]]>` - Game grid state
+- `projectedCells: Binding<[(row: Int, column: Int)]>` - Grid cells the block would occupy
+- `gridGeometry: GridGeometry` - Information about grid dimensions and cell sizes
+
+### Gesture System Integration
+- Works with `GestureMode` system to determine when dragging is permitted
+- Integrates with DirectCatEyeControl to coordinate cat eye animations
+- Posts notifications for cross-component communication during drag operations
+- Maintains internal state for gesture management
+
+### Drag Gesture Handling
+- Uses global coordinate space for consistent positioning
+- Tracks drag start and current position
+- Updates cat eye animations based on drag position (via DirectCatEyeControl)
+- Posts notifications to coordinate with other components
+- Throttles updates to maintain performance
+
+### Grid Projection
+```swift
+private func calculateGridProjection(at position: CGPoint)
+```
+- Determines which grid cells the block would occupy at the current position
+- Updates shared projection coordinator
+- Filters out invalid cells that are outside grid bounds
+- Used for visual feedback when dragging over the grid
+
+### Drag End Handling
+```swift
+private func handleDragEnded(at position: CGPoint)
+```
+- Attempts to place the block on the grid
+- Animates block placement
+- Coordinates state transitions
+- Sends notifications to update cat animations and game state
+- Triggers haptic feedback on successful placement
+
+### Drag Cancellation
+```swift
+private func handleDragCancelled()
+```
+- Handles forced cancellation of an ongoing drag
+- Resets all relevant state variables
+- Clears grid projection
+- Updates cat eye position and state
+- Used for emergency recovery when gesture states become inconsistent
+
+## 4. BlockPreview Component
+`BlockPreview.swift` renders preview versions of blocks in selection UI.
+
+### Key Properties
+- `block: Block` - Block to preview
+- `gridGeometry: GridGeometry` - Information about grid dimensions
+- `isSelected: Bool` - Whether this block is currently selected
+- `scale: CGFloat` - Size scaling factor
+- `cellSize: CGFloat?` - Optional override for cell size
+- `namespace: Namespace.ID` - For matched geometry effect animations
+
+### Rendering Approach
+- Uses GeometryReader to adapt to available space
+- Renders block cells with the block's shape and color
+- Supports dynamic sizing based on container dimensions
+- Integrates with matched geometry effects for smooth transitions
+
+### Block Dimensions Calculation
+```swift
+private var blockDimensions: (rows: Int, cols: Int)
+```
+- Computes the dimensions of the block from its shape matrix
+- Used to determine the appropriate size for the preview
+
+### Cell Size Calculation
+```swift
+private func getCellSize(_ geometry: GeometryProxy, rows: Int, cols: Int) -> CGFloat
+```
+- Calculates appropriate cell size based on available space and block dimensions
+- Respects the optional cellSize parameter if provided
+- Otherwise dynamically sizes to fit within available space
+
+### Animation Support
+- Provides matchedGeometryEffect integration for smooth animations
+- Supports rotation animation via rotationEffect
+- Implements scaling and opacity changes for interactive feedback
+
+## 5. DoodleType System
+`DoodleType.swift` defines different decorative elements that appear during gameplay.
+
+### Enum Cases
+- `star`, `heart`, `semicolon`, `moon`, `swirl`, `xSmile`, `sparkle`, `twentyEight`
+
+### Key Properties
+- `systemName: String` - System icon name when applicable
+- `rotationRange: ClosedRange<Double>` - Valid rotation angles for the doodle
+- `animationSpeed: Double` - Speed multiplier for animations
+- `movementAmplitude: Double` - Size of movement in animations
+
+### Animation Parameters
+- Each doodle type has specific animation behaviors tuned for performance and visual appeal
+- Special handling for symbolic types like `twentyEight` and `semicolon`
+- Variable animation speeds to create visual diversity
+
+### Static Methods
+```swift
+static func getWeightedType(index: Int) -> DoodleType
+```
+- Returns a doodle type with weighted probability
+- Makes certain types (like twentyEight and semicolon) appear more frequently
+- Uses modulo operations to create a deterministic but varied selection pattern
+- Helps ensure consistent distribution of doodle types for visual harmony
+
+## 6. DoodleElement Component
+`DoodleElement.swift` renders decorative elements that appear during gameplay.
+
+### Key Properties
+- `type: DoodleType` - The type of doodle to display
+- `rotation: Double` - Base rotation angle
+- `thickness: CGFloat` - Line thickness, influenced by streak
+- `color: Color` - Randomly chosen from a vibrant palette
+- `uniqueId: String` - Used to create deterministic behaviors
+
+### Rendering Logic
+- Uses a type-specific view builder to render each doodle type
+- Applies rotation and stop-motion effects
+- Implements subtle animations for certain doodle types
+- Optimizes rendering based on doodle type
+
+### Animation System
+- Implements stop-motion effects for specific doodle types
+- Uses uniqueId to generate deterministic but varied animations
+- Employs delayed animation sequences for performant visual variety
+- Special handling for twentyEight and semicolon doodles
+
+### Doodle Type Implementations
+- Each doodle type has a dedicated struct (StarDoodle, HeartDoodle, etc.)
+- Implementations focus on performance with simple Text or path-based rendering
+- Custom drawing for complex shapes like XSmileDoodle
+- Optimized shadow and effect usage to maintain performance
+
+### Performance Considerations
+- Uses simple text-based rendering whenever possible
+- Applies shadows selectively to maintain performance
+- Leverages hash-based randomization for deterministic behaviors
+- Minimizes state changes and animations for frequently updated doodles
+
+## 7. Block Selection System
+`BlockSelectionView.swift` manages the available blocks for player selection.
+
+### Key Components
+- Available blocks display area with scrollable interface
+- Visual feedback for hovering and selection
+- Pinning system for "holding" blocks for later use
+- Replacement system for used blocks
+
+### Block Management
+- Maintains an array of available blocks
+- Tracks used blocks to prevent immediate reappearance
+- Generates replacements when blocks are placed on the grid
+- Supports long-press gesture for pinning blocks
+
+### Block Holding Mechanism
+```swift
+@State private var heldBlock: Block? = nil
+```
+- Allows players to "pin" a block for later use
+- Removes held blocks from the main selection
+- Provides visual feedback with a pin icon
+- Implements release mechanism to return blocks to selection
+
+### Drag Gesture Handling
+```swift
+private func handleDragChange(value: DragGesture.Value, block: Block)
+```
+- Initiates block dragging and selection
+- Coordinates with cat eye animations via DirectCatEyeControl
+- Updates grid projection for placement preview
+- Maintains state consistency during drag operations
+
+```swift
+private func handleDragEnd(value: DragGesture.Value, block: Block)
+```
+- Handles completion of drag gestures
+- Manages block replacement when successfully placed
+- Resets cat eye animations and drag states
+- Triggers haptic feedback for successful placement
+
+### Block Replacement Logic
+- Removes placed blocks from available selection
+- Generates new random blocks as replacements
+- Ensures unique IDs for each new block
+- Maintains visual continuity with animated transitions
+
+## 8. Game Interaction Modes
+The game supports two distinct interaction modes controlled via the `GestureMode` enum.
+
+### Mode Types
+- `blockDragging` - For grid and block interactions
+- `catInteraction` - For cat eye and heart gestures
+
+### Mode Management
+```swift
+static var current: GestureMode = .blockDragging
+```
+- Global static property tracks the current active mode
+- Components check this property to determine behavior
+- Notifications broadcast mode changes across components
+
+### Mode Switching
+```swift
+private func toggleGestureMode()
+```
+- ContentView provides controls for switching between modes
+- Forces reset of any ongoing drag operations during mode change
+- Updates global state and broadcasts changes via notifications
+- Adjusts UI elements to reflect the current mode
+
+### Component Integration
+- DraggableBlock enables/disables gestures based on mode
+- BlockSelectionView adapts UI elements to current mode
+- Cat animations and interactions adjust to match current mode
+- Grid projection only occurs in blockDragging mode
+
+## 9. Doodle Position Management
+`DoodlePositionManager.swift` handles the positioning and animation of decorative elements.
+
+### Key Responsibilities
+- Maintains stable positions for doodles across renders
+- Manages animation timing and performance
+- Handles transitions between states
+- Optimizes rendering during dragging operations
+
+### Position Locking System
+```swift
+private var positionsLocked = true
+```
+- Most of the time positions are locked to prevent unnecessary recalculations
+- Only unlocks briefly during score changes to allow animation
+- Improves performance by caching position data
+
+### Drag State Awareness
+```swift
+private var isDraggingActive = false
+```
+- Tracks when the player is dragging blocks
+- Pauses animations during dragging to improve performance
+- Prevents visual conflicts between animations and drag operations
+
+### Position Management Methods
+```swift
+func getPosition(for id: String, defaultX: CGFloat, defaultY: CGFloat) -> CGPoint
+```
+- Provides stable positioning for doodles
+- Caches positions to minimize recalculations
+- Returns consistent values between renders
+
+```swift
+func getOffset(for id: String, defaultOffset: CGSize) -> CGSize
+```
+- Calculates animation offsets
+- Uses hash-based jitter for deterministic randomness
+- Optimizes by skipping updates during dragging
+
+```swift
+func getRotation(for id: String, defaultRotation: Double) -> Double
+```
+- Manages rotation animation
+- Provides consistent values between renders
+- Optimizes performance during dragging
+
+### Animation Optimization
+```swift
+func updatePositionsForScoreChange(newScore: Int)
+```
+- Throttles updates to prevent excessive calculations
+- Uses batch processing to update only a subset of doodles
+- Temporarily unlocks positions during updates
+- Implements deterministic animations based on score changes
+
+## 10. ContentView Architecture
+`ContentView.swift` serves as the main application view and coordinates all game components.
+
+### Key Responsibilities
+- Manages overall game state and layout
+- Coordinates interactions between components
+- Handles game setup and reset
+- Provides emergency error recovery for gesture states
+
+### Main View Components
+- Background doodles and decorative elements
+- Game panel with score display
+- Grid for block placement
+- Block selection interface
+- Draggable block overlay
+- Debug indicators and controls
+
+### Doodle Rendering System
+- Separated into logical components (BaseDoodlesView, MiddleDoodlesView, StreakDoodlesView)
+- Implements hash-based positioning for consistency
+- Uses DoodlePositionManager for animation coordination
+- Optimizes rendering with controlled animation speeds
+
+### State Management
+```swift
+@State private var grid: [[Bool]]
+@State private var score: Int
+@State private var currentStreak: Int
+@State private var selectedBlock: Block?
+@State private var isDragging: Bool
+@State private var blockPosition: CGPoint?
+```
+- Maintains core game state
+- Provides bindings to child components
+- Coordinates state changes across components
+- Implements safeguards against inconsistent states
+
+### Gesture Mode Control
+```swift
+@State private var gestureMode: GestureMode = .blockDragging
+```
+- Manages the active interaction mode
+- Provides UI for switching between modes
+- Coordinates mode changes with all components
+- Resets state when switching modes
+
+### Error Recovery System
+```swift
+private func forceResetAllDragStates()
+```
+- Provides emergency recovery for stuck drag states
+- Implements multi-stage reset with notifications
+- Uses delayed execution to ensure proper state reset sequence
+- Supports global override for persistent issues
+
+### Game Initialization
+```swift
+private func setupGame()
+```
+- Resets the grid to empty state
+- Initializes score and streak counters
+- Generates initial block selection
+- Sets up notification listeners
+- Configures initial gesture mode
+
+## 11. Component Interactions
+The TetheredSouls game relies on complex interactions between components to create a cohesive experience.
+
+### Block Selection Flow
+1. User selects a block from `BlockSelectionView`
+2. Selection triggers `BlockPreview` to render the selected block
+3. When dragging begins, `DraggableBlock` takes over rendering
+4. Grid projection shows where the block would be placed
+5. On successful placement, block is added to the grid and score is updated
+
+### Cat Animation Coordination
+1. `DraggableBlock` updates DirectCatEyeControl during dragging
+2. Eye positions update based on drag position
+3. Notifications inform cat component about drag state changes
+4. Cat responds to block placement with animations
+5. Position reset occurs after drag completes
+
+### Doodle Animation System
+1. Score changes trigger doodle position updates
+2. DoodlePositionManager unlocks positions briefly
+3. Hash-based calculations create deterministic animations
+4. Position updates use batching for performance
+5. Dragging temporarily pauses animations
+
+### Gesture Mode Switching
+1. User toggles between blockDragging and catInteraction modes
+2. ContentView updates global GestureMode.current
+3. Notifications inform all components about mode change
+4. Components enable/disable gestures accordingly
+5. Visual indicators update to reflect the current mode
+
+### Notification System
+- ForceCatEyeFrame - Updates cat eye position
+- BlockDragging/BlockDraggingEnded - Signals drag state changes
+- GestureModeChanged - Broadcasts mode switches
+- ForceDragReset/DragStateReset/FinalDragReset - Emergency reset sequence
+- GameDraggingStateChanged - Informs animation systems about drag state
+
+## 12. Performance Optimizations
+The TetheredSouls implementation includes several key optimizations for smooth performance.
+
+### Doodle Rendering
+- Uses Text-based rendering instead of complex paths when possible
+- Implements batch updates to limit the number of animations
+- Employs throttling to prevent excessive recalculations
+- Pauses animations during dragging operations
+
+### Position Management
+- Locks positions most of the time to prevent unnecessary recalculations
+- Uses hash-based deterministic positions instead of random values
+- Caches position data to minimize geometry calculations
+- Implements selective animation to limit CPU usage
+
+### Animation Techniques
+- Simplifies animations during high-activity moments
+- Uses deterministic animations based on IDs
+- Implements stop-motion effect for specific doodle types
+- Controls animation speed and timing to reduce CPU load
+
+### Drag Performance
+- Uses throttled updates for position calculations
+- Implements controlled animation sequences to prevent conflicts
+- Optimizes notification flow to reduce redundant updates
+- Uses direct control methods for critical animations
+
+### State Management
+- Implements careful reset sequences to avoid state conflicts
+- Uses delayed execution for animation synchronization
+- Provides multiple fallback mechanisms for error recovery
+- Separates visual updates from state changes for smoother animations
+
+## 13. State Management Patterns
+The TetheredSouls application implements several patterns to manage complex state.
+
+### Single Source of Truth
+- GameStateManager serves as the central state store
+- ContentView coordinates high-level state changes
+- Bindings pass state to child components
+- State dependencies are clearly defined
+
+### Binding Propagation
+- Core state variables use @Binding for two-way communication
+- Computed bindings transform state for specific needs
+- Component-specific state uses @State for isolation
+- Updates are coordinated through a binding hierarchy
+
+### Notification-Based Coordination
+- Cross-component updates use NotificationCenter
+- Critical state changes broadcast notifications
+- Components observe relevant notifications
+- Emergency resets trigger notification sequences
+
+### Stateful Singletons
+- DoodlePositionManager tracks animation state
+- GridProjectionCoordinator manages grid overlays
+- DirectCatEyeControl manages eye animations
+- GameStateManager maintains core game state
+
+### Reset Mechanisms
+- Multi-stage reset process ensures clean state
+- Timeout detection prevents stuck states
+- Emergency override bypasses normal state flow
+- Visual indicators show state for debugging

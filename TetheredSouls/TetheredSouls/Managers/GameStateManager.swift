@@ -11,7 +11,22 @@ class GameStateManager: ObservableObject {
     // Remove all background queues
     @Published var selectedBlock: Block? = nil
     @Published var blockPosition: CGPoint? = nil
-    @Published var isDragging = false
+    @Published var isDragging: Bool = false {
+        willSet {
+            if newValue != isDragging {
+                #if DEBUG
+                print("🚨 GameStateManager.isDragging changing from \(isDragging) to \(newValue)")
+                #endif
+                
+                // Notify about dragging state change
+                NotificationCenter.default.post(
+                    name: .init("GameDraggingStateChanged"),
+                    object: nil,
+                    userInfo: ["isDragging": newValue]
+                )
+            }
+        }
+    }
     @Published var grid = Array(repeating: Array(repeating: false, count: 10), count: 10)
     @Published var score = 0
     @Published var currentStreak = 0

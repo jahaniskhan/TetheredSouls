@@ -10,6 +10,9 @@ struct CellView: View {
     @State private var showHeart = false
     @StateObject private var touchCoordinator = GridTouchCoordinator.shared
     
+    // Add a state to track active heart particles with IDs
+    @State private var activeHeartParticles: [UUID: Color] = [:]
+    
     private let colors: [Color] = [
         Theme.primary,
         Theme.secondary,
@@ -34,11 +37,78 @@ struct CellView: View {
                         .opacity(0.5)
                 }
                 
-                if showHeart {
-                    HeartParticle(color: colors.randomElement() ?? Theme.primary)
+                // Display hearts with IDs
+                ForEach(Array(activeHeartParticles.keys), id: \.self) { id in
+                    if let color = activeHeartParticles[id] {
+                        HeartParticle(color: color, id: id)
+                            .position(CGPoint(x: geo.size.width/2, y: geo.size.height/2))
+                            .onAppear {
+                                // Remove the heart after animation completes
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                    activeHeartParticles.removeValue(forKey: id)
+                                    if activeHeartParticles.isEmpty {
+                                        showHeart = false
+                                    }
+                                }
+                            }
+                    }
                 }
             }
+            // Add tap gesture to create heart
+            .onTapGesture(coordinateSpace: .global) { location in
+                // Update touch coordinator when cell is tapped
+                touchCoordinator.touchLocation = location
+                
+                // Create heart in the cell
+                createHeart()
+                
+                // Reset touch location after a delay to allow eye movement to register
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    // Only reset if no new touches occurred
+                    if touchCoordinator.touchLocation == location {
+                        touchCoordinator.touchLocation = nil
+                    }
+                }
+            }
+            // Track drag gestures in the cell for eye movement
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { value in
+                        // Update cat eye tracking with current finger position
+                        touchCoordinator.touchLocation = value.location
+                    }
+                    .onEnded { _ in
+                        // Keep touch visible for a moment before resetting
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            touchCoordinator.touchLocation = nil
+                        }
+                    }
+            )
         }
+    }
+    
+    // New method to create a heart
+    private func createHeart() {
+        // Create multiple hearts for more impact
+        for _ in 0..<3 {
+            // Generate a unique ID for each heart
+            let heartId = UUID()
+            
+            // Add this heart to the active particles with a random color
+            activeHeartParticles[heartId] = colors.randomElement() ?? Theme.primary
+        }
+        
+        // Ensure the showHeart flag is on
+        if !showHeart {
+            showHeart = true
+        }
+        
+        // Provide more noticeable haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred(intensity: 0.7)
+        
+        // Inform the cat about interaction
+        NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
     }
     
     private var backgroundColor: Color {

@@ -8,6 +8,16 @@ import SwiftUI // Required for EnvironmentKey and EnvironmentValues
 /// 4. Previews/testing - easily mock environment states for different scenarios
 /// 5. Performance - more efficient than ObservableObject for simple flags
 
+// Add a global override that can bypass the environment system
+// This is a last resort for fixing persistent gesture issues
+class DragStateOverride {
+    static let shared = DragStateOverride()
+    private init() {}
+    
+    // When true, this forces isDraggingBlock to be false regardless of environment
+    var forceDisableDragState = false
+}
+
 /// Specifically for drag state:
 /// - Tracks when any block is being dragged globally
 /// - Allows cat face components to pause eye tracking during drags
@@ -21,7 +31,13 @@ extension EnvironmentValues {
     /// Current dragging state accessible anywhere in the view hierarchy
     /// Usage: @Environment(\.isDraggingBlock) var isDragging
     var isDraggingBlock: Bool {
-        get { self[DraggingBlockKey.self] }
+        get { 
+            // If override is active, always return false
+            if DragStateOverride.shared.forceDisableDragState {
+                return false
+            }
+            return self[DraggingBlockKey.self] 
+        }
         set { self[DraggingBlockKey.self] = newValue }
     }
 }

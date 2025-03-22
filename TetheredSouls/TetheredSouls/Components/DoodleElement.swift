@@ -23,12 +23,16 @@ struct DoodleElement: View {
         self.rotation = rotation
         self.thickness = CGFloat(min(streak, 10)) * 0.2 + 1.0
         
-        // Let the colors speak their truth
+        // Let the colors be vibrant and varied
         let colors: [Color] = [
-            Theme.block1,        // Pure, unfiltered
-            Theme.block2,        // Raw emotion
-            Theme.block3,        // Deep connection
-            Theme.textPrimary    // The essence
+            Color.purple.opacity(0.7),       // Bright purple
+            Color.blue.opacity(0.7),         // Bright blue
+            Color.red.opacity(0.7),          // Bright red
+            Color.orange.opacity(0.7),       // Bright orange
+            Color.green.opacity(0.7),        // Bright green
+            Color.pink.opacity(0.7),         // Bright pink
+            Color.yellow.opacity(0.7),       // Bright yellow
+            Color.cyan.opacity(0.7)          // Bright cyan
         ]
         
         // Let the color intensity grow with the streak
@@ -47,14 +51,27 @@ struct DoodleElement: View {
     @ViewBuilder
     private var content: some View {
         switch type {
-        case .star: StarDoodle(color: color)
-        case .heart: HeartDoodle(color: color)
-        case .semicolon: SemicolonDoodle(color: color)
-        case .moon: MoonDoodle(color: color, thickness: thickness)
-        case .swirl: SwirlDoodle(color: color, thickness: thickness)
-        case .xSmile: XSmileDoodle(color: color)
-        case .sparkle: SparkleDoodle(color: color)
-        case .puzzle: PuzzleDoodle(color: color)
+        case .twentyEight:
+            // Explicitly render "28" as text to ensure it appears
+            Text("28")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(color)
+        case .star, .heart, .moon, .sparkle:
+            Image(systemName: type.systemName)
+                .font(.system(size: 18))
+                .foregroundColor(color)
+        case .semicolon:
+            Text(";")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(color)
+        case .xSmile:
+            // Use the custom XSmileDoodle view instead of text
+            XSmileDoodle(color: color)
+        case .swirl:
+            Image(systemName: type.systemName)
+                .font(.system(size: 16))
+                .foregroundColor(color)
+                .rotationEffect(.degrees(Double.random(in: 0...360)))
         }
     }
 }
@@ -73,10 +90,10 @@ private struct StarDoodle: View {
     let color: Color
     
     var body: some View {
-        Text("✦")  // Bolder star symbol
-            .font(.system(size: 28, weight: .black)) // Increased size and weight
+        Text("✦")
+            .font(.system(size: 36, weight: .black))
             .foregroundColor(color)
-            .shadow(color: color.opacity(0.4), radius: 3, x: 0, y: 0)
+            .shadow(color: color.opacity(0.6), radius: 5, x: 0, y: 0)
     }
 }
 
@@ -91,14 +108,15 @@ private struct HeartDoodle: View {
     }
 }
 
-// Better semicolon
+// Replace the complex SemicolonDoodle with a simple text-based one
 private struct SemicolonDoodle: View {
     let color: Color
     
     var body: some View {
-        Text("⁏")  // Using a more stylized semicolon
-            .font(.system(size: 20))
+        Text(";")  // Using a real semicolon character
+            .font(.system(size: 24, weight: .bold))  // Larger and bolder to be more visible
             .foregroundColor(color)
+            .shadow(color: color.opacity(0.5), radius: 2, x: 0, y: 0)  // Add a subtle shadow for visibility
     }
 }
 
@@ -108,9 +126,10 @@ private struct MoonDoodle: View {
     let thickness: CGFloat
     
     var body: some View {
-        Text("☽")  // Using moon symbol instead of drawing
-            .font(.system(size: 20))
+        Text("☽")  // Using moon symbol
+            .font(.system(size: 32))  // Increased from 20
             .foregroundColor(color)
+            .shadow(color: color.opacity(0.5), radius: 3, x: 0, y: 0)
     }
 }
 
@@ -126,36 +145,44 @@ private struct SwirlDoodle: View {
     }
 }
 
-// X-eyed smile - minimalist tattoo style
+// Create a custom XSmileDoodle that looks like the image (two X's and a smile)
 private struct XSmileDoodle: View {
     let color: Color
     
     var body: some View {
-        Path { path in
-            // Left X
-            path.move(to: CGPoint(x: 8, y: 8))
-            path.addLine(to: CGPoint(x: 12, y: 12))
-            path.move(to: CGPoint(x: 12, y: 8))
-            path.addLine(to: CGPoint(x: 8, y: 12))
+        // Draw the X X smile face using Path for precise control
+        ZStack {
+            // For better visibility against any background
+            Color.clear.frame(width: 30, height: 30)
             
-            // Right X
-            path.move(to: CGPoint(x: 18, y: 8))
-            path.addLine(to: CGPoint(x: 22, y: 12))
-            path.move(to: CGPoint(x: 22, y: 8))
-            path.addLine(to: CGPoint(x: 18, y: 12))
-            
-            // Simple curved smile
-            path.move(to: CGPoint(x: 8, y: 18))
-            path.addQuadCurve(
-                to: CGPoint(x: 22, y: 18),
-                control: CGPoint(x: 15, y: 22)
-            )
+            Path { path in
+                // Left X eye
+                path.move(to: CGPoint(x: 5, y: 5))
+                path.addLine(to: CGPoint(x: 11, y: 11))
+                path.move(to: CGPoint(x: 11, y: 5))
+                path.addLine(to: CGPoint(x: 5, y: 11))
+                
+                // Right X eye
+                path.move(to: CGPoint(x: 19, y: 5))
+                path.addLine(to: CGPoint(x: 25, y: 11))
+                path.move(to: CGPoint(x: 25, y: 5))
+                path.addLine(to: CGPoint(x: 19, y: 11))
+                
+                // Smile (curved line)
+                path.move(to: CGPoint(x: 7, y: 20))
+                path.addQuadCurve(
+                    to: CGPoint(x: 23, y: 20),
+                    control: CGPoint(x: 15, y: 26)
+                )
+            }
+            .stroke(color, style: StrokeStyle(
+                lineWidth: 2.5,       // Thicker lines for visibility
+                lineCap: .round,
+                lineJoin: .round
+            ))
         }
-        .stroke(color, style: StrokeStyle(
-            lineWidth: 1.5,
-            lineCap: .round,
-            lineJoin: .round
-        ))
+        // Give it a touch more room than other doodles since it's custom drawn
+        .frame(width: 30, height: 30)
     }
 }
 
@@ -177,5 +204,17 @@ private struct PuzzleDoodle: View {
         Text("🧩")
             .font(.system(size: 20))
             .foregroundColor(color)
+    }
+}
+
+// Add this new doodle type implementation
+private struct TwentyEightDoodle: View {
+    let color: Color
+    
+    var body: some View {
+        Text("28")
+            .font(.system(size: 24, weight: .bold))
+            .foregroundColor(color)
+            .shadow(color: color.opacity(0.5), radius: 2, x: 0, y: 0)
     }
 }
