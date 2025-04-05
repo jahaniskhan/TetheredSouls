@@ -9,7 +9,18 @@ class GameStateManager: ObservableObject {
     private var velocity: CGVector = .zero
     
     // Remove all background queues
-    @Published var selectedBlock: Block? = nil
+    @Published var selectedBlock: Block? = nil {
+        didSet {
+            // Update ContentView's selected block if it changes
+            if selectedBlock != oldValue {
+                NotificationCenter.default.post(
+                    name: .init("SelectedBlockChanged"),
+                    object: nil,
+                    userInfo: ["block": selectedBlock as Any]
+                )
+            }
+        }
+    }
     @Published var blockPosition: CGPoint? = nil
     @Published var isDragging: Bool = false {
         willSet {
@@ -28,6 +39,7 @@ class GameStateManager: ObservableObject {
         }
     }
     @Published var grid = Array(repeating: Array(repeating: false, count: 10), count: 10)
+    @Published var blockColorGrid = Array(repeating: Array(repeating: nil as Color?, count: 10), count: 10)
     @Published var score = 0
     @Published var currentStreak = 0
     @Published var blockFrames: [UUID: CGRect] = [:]

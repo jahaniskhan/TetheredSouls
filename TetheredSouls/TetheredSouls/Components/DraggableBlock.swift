@@ -41,8 +41,10 @@ struct DraggableBlock: View {
     @State private var didCancelDrag: Bool = false
     @State private var currentGestureMode: GestureMode = .blockDragging
     @StateObject private var gameStateManager = GameStateManager.shared
+    @State private var isPreviewing: Bool = false
     
-    private let projectionCoordinator = GridProjectionCoordinator.shared
+    // Initialize projectionCoordinator as a StateObject
+    @StateObject private var projectionCoordinator = ProjectionCoordinator()
     
     // MARK: - Body
     var body: some View {
@@ -69,107 +71,50 @@ struct DraggableBlock: View {
                 .opacity(0.8)
                 .offset(dragOffset)
                 .gesture(
-                    DragGesture(coordinateSpace: .global)
+                    DragGesture(minimumDistance: 0, coordinateSpace: .global)
                         .onChanged { value in
-                            // First check if we're in the correct gesture mode
-                            if currentGestureMode == .blockDragging {
-                                self.isDragging = true
-                                self.didCancelDrag = false
+                            // Update drag state
+                            if dragStart == nil {
+                                dragStart = value.startLocation
+                                isDragging = true
+                                isPreviewing = true
                                 
-                                // Update the shared game state manager's dragging state
-                                GameStateManager.shared.isDragging = true
-                                
-                                // CRITICAL - Also update DirectCatEyeControl dragging state
-                                DirectCatEyeControl.shared.isDragging = true
-                                
-                                // CRITICAL - Remove throttling for position updates to cat eyes
-                                // Ensure immediate response by updating every frame
-                                self.lastUpdateTime = Date()
-                                
-                                if dragStart == nil {
-                                    dragStart = value.startLocation
-                                }
-                                
-                                self.dragOffset = value.translation
-                                
-                                // Use the location from global space
-                                self.blockPosition = value.location
-                                
-                                // DIRECT CAT EYE CONTROL: Directly force the cat to look down
-                                // This bypasses all the notification system and state management complexity
-                                let screenWidth = UIScreen.main.bounds.width
-                                let leftZone = screenWidth * 0.4
-                                let rightZone = screenWidth * 0.6
-                                
-                                // Update frame numbers to create more dramatic movement
-                                let catEyeFrame: Int
-                                if value.location.x < leftZone {
-                                    catEyeFrame = 20 // Look RIGHT when dragging on LEFT side
-                                } else if value.location.x > rightZone {
-                                    catEyeFrame = 5 // Look LEFT when dragging on RIGHT side
-                                } else {
-                                    catEyeFrame = 2 // Keep center-down the same
-                                }
-                                
-                                // MOST CRITICAL CHANGE: Directly set eye frame via static controller
-                                DirectCatEyeControl.shared.currentEyeFrame = catEyeFrame
-                                
-                                #if DEBUG
-                                print("🔴 DIRECT CAT EYE CONTROL: \(catEyeFrame)")
-                                print("🧩 SETTING DIRECT CAT EYE CONTROL")
-                                print("  - isDragging = \(DirectCatEyeControl.shared.isDragging)")
-                                print("  - currentEyeFrame = \(DirectCatEyeControl.shared.currentEyeFrame)")
-                                #endif
-                                
-                                // Directly set the cat's eye frame in all CatFeatures instances
-                                NotificationCenter.default.post(
-                                    name: .init("ForceCatEyeFrame"),
-                                    object: nil,
-                                    userInfo: ["frame": catEyeFrame, "isDragging": true]
-                                )
-                                
-                                // Update cat eye position during drag without triggering hearts
-                                // Make sure to use the GLOBAL coordinates since we're passing them directly
-                                GridTouchCoordinator.shared.touchLocation = value.location
-                                
-                                // CRITICAL: Force update the global game state again for redundancy
-                                GameStateManager.shared.isDragging = true
-                                
-                                // CRITICAL: Trigger notification for cat to spectate the block
-                                // Include the exact position in the notification - ALWAYS use global coordinates
-                                NotificationCenter.default.post(
-                                    name: .init("BlockDragging"),
-                                    object: nil,
-                                    userInfo: ["position": value.location]
-                                )
-                                
-                                // Ensure we wake the cat but don't change gesture mode
-                                NotificationCenter.default.post(name: .resetIdleTimer, object: nil)
-                                
-                                // Debug every frame to track dragging
-                                #if DEBUG
-                                print("🧩 BLOCK DRAGGING ACTIVE at: \(Int(value.location.x)), \(Int(value.location.y))")
-                                print("🧩 GameStateManager.isDragging = \(GameStateManager.shared.isDragging)")
-                                #endif
-                                
-                                // Calculate grid projection coordinates
-                                calculateGridProjection(at: value.location)
+                                // Tell the state manager we're dragging
+                                gameStateManager.isDragging = true
                             }
+                            
+                            // Calculate the offset
+                            dragOffset = CGSize(
+                                width: value.translation.width,
+                                height: value.translation.height
+                            )
+                            
+                            // Calculate current position
+                            let currentPosition = CGPoint(
+                                x: value.location.x,
+                                y: value.location.y
+                            )
+                            
+                            // Update block position 
+                            blockPosition = currentPosition
+                            
+                            // Directly update the projection for simple grid placement
+                            updateProjection(
+                                at: currentPosition,
+                                gridWidth: geometry.size.width,
+                                gridHeight: geometry.size.height
+                            )
                         }
                         .onEnded { value in
                             // Only process drag end if in correct mode
                             if currentGestureMode == .blockDragging {
                                 // Reset eye position when drag ends
-                                // Delay resetting touchLocation to give the cat time to follow placement
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                     GridTouchCoordinator.shared.touchLocation = nil
                                 }
                                 
                                 // Update the shared game state manager's dragging state
                                 self.gameStateManager.isDragging = false
-                                
-                                // CRITICAL - Also update DirectCatEyeControl dragging state
-                                DirectCatEyeControl.shared.isDragging = false
                                 
                                 // Reset cat's eye frame to default position
                                 NotificationCenter.default.post(
@@ -178,14 +123,11 @@ struct DraggableBlock: View {
                                     userInfo: ["frame": 13, "isDragging": false]
                                 )
                                 
-                                // Post notification that block dragging ended for cat to reset
-                                NotificationCenter.default.post(
-                                    name: .init("BlockDraggingEnded"),
-                                    object: nil
-                                )
+                                // Get final position for accurate placement
+                                let finalPosition = value.location
                                 
                                 // Attempt to place the block
-                                handleDragEnded(at: value.location)
+                                handleDragEnded(gridWidth: geometry.size.width, gridHeight: geometry.size.height)
                             }
                         }
                 )
@@ -243,45 +185,36 @@ struct DraggableBlock: View {
     
     // MARK: - Methods
     private func calculateGridProjection(at position: CGPoint) {
-        guard let block = selectedBlock else { return }
+        guard let block = selectedBlock else { 
+            projectedCells = []
+            return 
+        }
         
-        #if DEBUG
-        print("DraggableBlock - Position: \(position)")
-        print("DraggableBlock - Grid frame in coordinator: \(projectionCoordinator.gridFrame)")
-        #endif
-        
-        // Use coordinator to get grid cell 
-        guard let (row, col) = projectionCoordinator.calculateGridCell(at: position) else {
-            // Position is outside the grid
-            projectionCoordinator.projectedCells = []
+        // Get the grid cell directly from the GridProjectionCoordinator
+        guard let (baseRow, baseCol) = GridProjectionCoordinator.shared.calculateGridCell(at: position) else {
+            projectedCells = []
             return
         }
         
         // Create array of affected cells based on block shape
-        var projectedCells: [(row: Int, column: Int)] = []
+        var newProjectedCells: [(row: Int, column: Int)] = []
         
-        for blockRow in 0..<block.shape.count {
-            for blockCol in 0..<block.shape[blockRow].count {
-                if block.shape[blockRow][blockCol] {
-                    let gridRow = row + blockRow
-                    let gridCol = col + blockCol
+        for (r, blockRow) in block.shape.enumerated() {
+            for (c, isSet) in blockRow.enumerated() {
+                if isSet {
+                    let gridRow = baseRow + r
+                    let gridCol = baseCol + c
                     
                     // Only add cells that are within grid bounds
-                    if gridRow >= 0 && gridRow < 10 && gridCol >= 0 && gridCol < 10 {
-                        projectedCells.append((row: gridRow, column: gridCol))
+                    if gridRow >= 0 && gridRow < GridView.rows && gridCol >= 0 && gridCol < GridView.columns {
+                        newProjectedCells.append((row: gridRow, column: gridCol))
                     }
                 }
             }
         }
         
-        #if DEBUG
-        if !projectedCells.isEmpty {
-            print("Projected cells: \(projectedCells)")
-        }
-        #endif
-        
-        // Update the shared projection coordinator
-        projectionCoordinator.projectedCells = projectedCells
+        // Update the projected cells
+        projectedCells = newProjectedCells
     }
     
     private func handleDragCancelled() {
@@ -293,13 +226,10 @@ struct DraggableBlock: View {
         didCancelDrag = true
         
         // Clear the projection
-        projectionCoordinator.projectedCells = []
+        projectedCells = []
         
         // Ensure game state is updated
         gameStateManager.isDragging = false
-        
-        // CRITICAL - Also update DirectCatEyeControl dragging state
-        DirectCatEyeControl.shared.isDragging = false
         
         // Reset cat's eye frame to default position
         NotificationCenter.default.post(
@@ -322,58 +252,92 @@ struct DraggableBlock: View {
         // No need to set isDragging here as ContentView is handling it
     }
     
-    private func handleDragEnded(at position: CGPoint) {
-        #if DEBUG
-        print("DraggableBlock - Drag ended, resetting isDragging state")
-        #endif
-        
-        // Don't do anything if we've already cancelled
-        if didCancelDrag {
-            return
-        }
-        
-        // First clear the projection to avoid state conflict
-        projectionCoordinator.projectedCells = []
-        
-        // Keep the final touch location active for a moment for eye tracking
-        // This ensures the cat looks where the block was placed
-        let finalLocation = position
-        
-        // Tell the cat to end dragging with the final position
-        if let blockPos = blockPosition {
-            // First reset to looking straight down to ensure smoother transition
+    private func handleDragEnded(gridWidth: CGFloat, gridHeight: CGFloat) {
+        // Only attempt to place block if we have projected cells
+        if let block = selectedBlock {
+            // Get the grid position at the current location
+            guard let blockPosition = blockPosition else {
+                return
+            }
+
+            // Try to get the grid cell
+            guard let (baseRow, baseCol) = GridProjectionCoordinator.shared.calculateGridCell(at: blockPosition) else {
+                // Reset state and return if position is outside grid
+                resetAfterPlacement()
+                return
+            }
+            
+            // Directly attempt placement
             NotificationCenter.default.post(
-                name: .init("BlockDraggingEnded"),
+                name: Notification.Name.didAttemptBlockPlacement,
                 object: nil,
-                userInfo: ["finalPosition": blockPos]
+                userInfo: [
+                    "row": baseRow,
+                    "column": baseCol,
+                    "block": block
+                ]
             )
         }
         
-        // Use controlled main thread updates to avoid animation conflicts
+        // Always reset state
+        resetAfterPlacement()
+    }
+    
+    // Add a simple method to reset state after placement
+    private func resetAfterPlacement() {
+        // Reset all state immediately
         DispatchQueue.main.async {
-            // Reset in a specific order to avoid animation timing issues
-            self.dragOffset = .zero
-            self.dragStart = nil
+            isDragging = false
+            dragOffset = .zero
+            dragStart = nil
+            isPreviewing = false
+            projectedCells = []
             
-            // Animate position to nil with a controlled animation
-            withAnimation(.easeOut(duration: 0.1)) {
-                self.blockPosition = nil
-            }
-            
-            // Delay the isDragging state change slightly to ensure animations complete
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.isDragging = false
-            }
-            
-            // Keep the touch location for a short while after drag ends
-            // This ensures the cat eyes continue to track where the block was placed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                // Only reset if this was the last touch at this location
-                if GridTouchCoordinator.shared.touchLocation == finalLocation {
-                    GridTouchCoordinator.shared.touchLocation = nil
+            // Force clear the projection state
+            GridProjectionCoordinator.shared.projectedCells = []
+        }
+    }
+    
+    // Helper method to check if a block can be placed
+    private func canPlaceBlockAt(row: Int, column: Int) -> Bool {
+        guard let block = selectedBlock else { return false }
+        
+        // Only check the actual grid state and don't modify it
+        let gridState = GameStateManager.shared.grid // Use GameStateManager's grid
+        
+        // Check if all cells required by the block can be placed
+        for blockRow in 0..<block.shape.count {
+            for blockCol in 0..<block.shape[blockRow].count {
+                if block.shape[blockRow][blockCol] {
+                    let gridRow = row + blockRow
+                    let gridCol = column + blockCol
+                    
+                    // Check bounds
+                    if gridRow < 0 || gridRow >= gridState.count || gridCol < 0 || gridCol >= gridState[0].count {
+                        return false
+                    }
+                    
+                    // Check if cell is already occupied - this is critical
+                    if gridState[gridRow][gridCol] {
+                        return false
+                    }
                 }
             }
         }
+        
+        return true
+    }
+    
+    // Add updateProjection method to properly update the projection with CGPoint
+    private func updateProjection(at position: CGPoint, gridWidth: CGFloat, gridHeight: CGFloat) {
+        // Calculate the projected cells based on the drag position
+        calculateGridProjection(at: position)
+        
+        // Update block position for UI purposes
+        blockPosition = position
+        
+        // Update touch location for cat eye tracking
+        GridTouchCoordinator.shared.touchLocation = position
     }
 }
 
@@ -396,4 +360,8 @@ extension Comparable {
     func clamped(to limits: ClosedRange<Self>) -> Self {
         min(max(self, limits.lowerBound), limits.upperBound)
     }
+}
+
+class ProjectionCoordinator: ObservableObject {
+    @Published var projectedCells: CGPoint? = nil
 }

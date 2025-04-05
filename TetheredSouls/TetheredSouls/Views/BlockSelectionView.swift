@@ -357,7 +357,18 @@ struct BlockSelectionView: View {
     }
     
     private func updateGridProjection(position: CGPoint, block: Block) {
-        guard let (row, col) = GridProjectionCoordinator.shared.calculateGridCell(at: position) else {
+        // Apply a direct, fixed vertical offset to fix the gap
+        let fixedOffset = CGPoint(
+            x: position.x,
+            y: position.y - 250 // Large fixed offset to move the projection up significantly
+        )
+        
+        #if DEBUG
+        print("🔄 BlockSelectionView - Original position: \(position)")
+        print("🔄 BlockSelectionView - Adjusted position: \(fixedOffset)")
+        #endif
+        
+        guard let (row, col) = GridProjectionCoordinator.shared.calculateGridCell(at: fixedOffset) else {
             GridProjectionCoordinator.shared.projectedCells = []
             return
         }
@@ -438,30 +449,35 @@ struct BlockSelectionView: View {
         }
         
         // Flag to track if we placed successfully
-        let didPlaceBlock = GridView.validatePlacement(at: value.location)
+        let position = GridProjectionCoordinator.shared.lastAdjustedPosition ?? value.location
+        let didPlaceBlock = GridView.validatePlacement(at: position)
         
         if didPlaceBlock {
-            playHapticFeedback()
-            
-            // Check if this is the held block
-            if heldBlock?.id == block.id {
-                withAnimation(.spring()) {
-                    heldBlock = nil
-                }
-            } else {
-                // Existing block replacement code
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    availableBlocks.removeAll { $0.id == block.id }
-                    
-                    // Get new random block that's not currently shown
-                    let remainingBlocks = Block.blocks.filter { b in
-                                !availableBlocks.contains(where: { $0.id == b.id }) &&
-                                (heldBlock == nil || b.id != heldBlock!.id)
+            // Get grid coordinates from position
+            if let (row, column) = GridProjectionCoordinator.shared.calculateGridCell(at: position) {
+                // Update the grid with this block
+                updateGridWithBlock(block, at: row, column: column)
+                
+                // Check if this is the held block
+                if heldBlock?.id == block.id {
+                    withAnimation(.spring()) {
+                        heldBlock = nil
                     }
-                    
-                    if let newBlock = remainingBlocks.randomElement() {
-                        availableBlocks.append(newBlock)
+                } else {
+                    // Existing block replacement code
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            availableBlocks.removeAll { $0.id == block.id }
+                            
+                            // Get new random block that's not currently shown
+                            let remainingBlocks = Block.blocks.filter { b in
+                                        !availableBlocks.contains(where: { $0.id == b.id }) &&
+                                        (heldBlock == nil || b.id != heldBlock!.id)
+                            }
+                            
+                            if let newBlock = remainingBlocks.randomElement() {
+                                availableBlocks.append(newBlock)
+                            }
                         }
                     }
                 }
@@ -482,6 +498,74 @@ struct BlockSelectionView: View {
             // Important: we don't reset isDragging here - DraggableBlock handles that
             // This prevents state conflicts when multiple components try to reset it
             selectedBlock = nil
+        }
+    }
+    
+    // Add this new method to update the grid
+    private func updateGridWithBlock(_ block: Block, at row: Int, column: Int) {
+        // Get reference to shared grid
+        var grid = GameStateManager.shared.grid
+        
+        // Place the block in the grid
+        for (r, blockRow) in block.shape.enumerated() {
+            for (c, isSet) in blockRow.enumerated() {
+                if isSet {
+                    let gridRow = row + r
+                    let gridCol = column + c
+                    if gridRow >= 0 && gridRow < grid.count && gridCol >= 0 && gridCol < grid[0].count {
+                        grid[gridRow][gridCol] = true
+                    }
+                }
+            }
+        }
+        
+        // Update the grid in GameStateManager
+        GameStateManager.shared.grid = grid
+        
+        // Add haptic feedback
+        HapticManager.triggerPlacementFeedback()
+        
+        // Update score and streak
+        GameStateManager.shared.currentStreak += 1
+        
+        // Notify about block placement for animations
+        NotificationCenter.default.post(
+            name: Notification.Name.blockPlaced,
+            object: nil,
+            userInfo: [
+                "position": CGPoint(x: column, y: row),
+                "blockType": block.symbol
+            ]
+        )
+        
+        // Check for completed rows
+        checkForCompletedRows()
+    }
+    
+    // Add this method to check for completed rows
+    private func checkForCompletedRows() {
+        var grid = GameStateManager.shared.grid
+        var row = grid.count - 1
+        var rowsCleared = 0
+        
+        while row >= 0 {
+            if grid[row].allSatisfy({ $0 }) {
+                // Remove completed row
+                grid.remove(at: row)
+                // Add new empty row at top
+                grid.insert(Array(repeating: false, count: grid[0].count), at: 0)
+                rowsCleared += 1
+            } else {
+                row -= 1
+            }
+        }
+        
+        if rowsCleared > 0 {
+            // Update score based on rows cleared
+            GameStateManager.shared.score += rowsCleared * 100
+            
+            // Update the grid with changes
+            GameStateManager.shared.grid = grid
         }
     }
     

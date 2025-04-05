@@ -7,11 +7,22 @@ struct CellView: View {
     let column: Int
     let selectedBlock: Block?
     let isPreview: Bool
+    let blockColor: Color?
     @State private var showHeart = false
     @StateObject private var touchCoordinator = GridTouchCoordinator.shared
     
     // Add a state to track active heart particles with IDs
     @State private var activeHeartParticles: [UUID: Color] = [:]
+    
+    // Default initializer with optional blockColor
+    init(isOccupied: Bool, row: Int, column: Int, selectedBlock: Block?, isPreview: Bool, blockColor: Color? = nil) {
+        self.isOccupied = isOccupied
+        self.row = row
+        self.column = column
+        self.selectedBlock = selectedBlock
+        self.isPreview = isPreview
+        self.blockColor = blockColor
+    }
     
     private let colors: [Color] = [
         Theme.primary,
@@ -113,7 +124,18 @@ struct CellView: View {
     
     private var backgroundColor: Color {
         if isOccupied {
-            return isPreview ? Color.white.opacity(0.3) : Theme.primary
+            // When a cell is occupied, we want to keep the block's color instead of the theme primary
+            if isPreview {
+                // For preview of current dragged block, use block color with transparency
+                if let block = selectedBlock {
+                    return block.color.color.opacity(0.3)
+                } else {
+                    return Color.white.opacity(0.3)
+                }
+            } else {
+                // For permanently placed cells, use the passed blockColor or a light pink default
+                return blockColor?.opacity(0.7) ?? Theme.block1.opacity(0.7)
+            }
         } else {
             return Color.white.opacity(0.05)
         }

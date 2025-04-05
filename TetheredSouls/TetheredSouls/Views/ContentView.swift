@@ -17,10 +17,13 @@ protocol DragStateResettable {
 }
 
 struct ContentView: View {
+    static var shared: ContentView!
+    
     private let columns: Int = 10
     private let rows: Int = 10
     
     @State private var grid: [[Bool]] = Array(repeating: Array(repeating: false, count: 10), count: 10)
+    @State private var blockColorGrid: [[Color?]] = Array(repeating: Array(repeating: nil as Color?, count: 10), count: 10)
     @State private var score: Int = 0
     @State private var currentStreak: Int = 0
     @State private var isLoading = true
@@ -134,12 +137,21 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 20)
                         
-                        GridView(grid: $grid, selectedBlock: $selectedBlock, blockPosition: $blockPosition, isDragging: $isDragging)
+                        GridView(
+                            grid: $grid, 
+                            blockColorGrid: $blockColorGrid,
+                            selectedBlock: $selectedBlock, 
+                            blockPosition: $blockPosition, 
+                            isDragging: $isDragging
+                        )
                             .padding(.horizontal, 20)
                         
                         BlockSelectionView(
                             availableBlocks: $availableBlocks,
-                            selectedBlock: $selectedBlock,
+                            selectedBlock: Binding(
+                                get: { self.selectedBlock },
+                                set: { self.selectBlock($0) }
+                            ),
                             blockPosition: $blockPosition,
                             isDragging: $isDragging,
                             gridGeometry: $gridGeometry
@@ -319,20 +331,39 @@ struct ContentView: View {
                     }
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .init("BlockPlaced"))) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name.blockPlaced)) { notification in
                 if let points = notification.userInfo?["points"] as? Int {
                     score += points
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .init("SelectedBlockChanged"))) { notification in
+                if let block = notification.userInfo?["block"] as? Block {
+                    // Use our safe method to select a block without losing grid state
+                    selectBlock(block)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name.didAttemptBlockPlacement)) { notification in
+                if let userInfo = notification.userInfo,
+                   let row = userInfo["row"] as? Int,
+                   let column = userInfo["column"] as? Int,
+                   let block = userInfo["block"] as? Block {
+                    print("🔄 Received didAttemptBlockPlacement notification: row=\(row), column=\(column)")
+                    self.placeBlockAtProjection(row: row, column: column, block: block)
+                }
+            }
             .onPreferenceChange(GridGeometryKey.self) { geometry in
-                #if DEBUG
-                print("GridGeometry updated: \(geometry.frame)")
-                #endif
+                print("🔰 GRID GEOMETRY UPDATED in ContentView: \(geometry.frame)")
+                
+                // Update our local geometry state
                 self.gridGeometry = geometry
                 
-                // Ensure GridProjectionCoordinator knows about grid geometry
+                // CRITICAL: Ensure GridProjectionCoordinator knows about grid geometry
                 GridProjectionCoordinator.shared.gridFrame = geometry.frame
                 GridProjectionCoordinator.shared.cellSize = geometry.cellSize
+                
+                // Log to verify the update
+                print("🔰 Updated GridProjectionCoordinator with frame: \(GridProjectionCoordinator.shared.gridFrame)")
+                print("🔰 Updated GridProjectionCoordinator with cell size: \(GridProjectionCoordinator.shared.cellSize)")
             }
             .onChange(of: isDragging) { oldValue, newValue in
                 if newValue {
@@ -371,6 +402,9 @@ struct ContentView: View {
             gestureMode = .blockDragging
             GestureMode.current = .blockDragging
             
+            // Sync our grid with GameStateManager
+            grid = GameStateManager.shared.grid
+            
             // Listen for GestureModeChanged notifications
             NotificationCenter.default.addObserver(
                 forName: .init("GestureModeChanged"),
@@ -383,6 +417,55 @@ struct ContentView: View {
                     GestureMode.current = newMode
                 }
             }
+            
+            // Set up the grid
+            setupGrid()
+            
+            // Generate initial blocks
+            generateBlocks()
+            
+            // Set ContentView.shared
+            ContentView.shared = self
+            
+            // Set up notification observers
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name.didSelectBlock,
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let block = notification.userInfo?["block"] as? Block {
+                    self.selectedBlock = block
+                }
+            }
+            
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name.didDeselectBlock,
+                object: nil,
+                queue: .main
+            ) { _ in
+                self.selectedBlock = nil
+            }
+            
+            // Listen for block placement attempts
+            NotificationCenter.default.addObserver(forName: Notification.Name.didAttemptBlockPlacement, object: nil, queue: .main) { notification in
+                if let userInfo = notification.userInfo,
+                   let row = userInfo["row"] as? Int,
+                   let column = userInfo["column"] as? Int,
+                   let block = userInfo["block"] as? Block {
+                    
+                    // Attempt to place the block
+                    if GridView.canPlaceBlockAt(row: row, column: column, block: block, grid: self.grid) {
+                        // Place is valid, place the block
+                        self.placeBlockAtProjection(row: row, column: column, block: block)
+                    } else {
+                        // Invalid placement, notify
+                        NotificationCenter.default.post(name: Notification.Name.placementFailed, object: nil)
+                    }
+                }
+            }
+            
+            // Start the game
+            startGame()
         }
     }
     
@@ -534,6 +617,10 @@ struct ContentView: View {
     private func setupGame() {
         // Initialize the grid with empty cells
         grid = Array(repeating: Array(repeating: false, count: columns), count: rows)
+        blockColorGrid = Array(repeating: Array(repeating: nil, count: columns), count: rows)
+        
+        // IMPORTANT: Make sure GameStateManager has the same grid state
+        GameStateManager.shared.grid = grid
         
         // Initialize score
         score = 0
@@ -565,6 +652,172 @@ struct ContentView: View {
             Block.createRandom(),
             Block.createRandom()
         ]
+    }
+    
+    // Simplify the block placement method
+    private func placeBlockAtProjection(row: Int, column: Int, block: Block) {
+        // Safety check - ensure the row and column are valid
+        if row < 0 || row >= grid.count || column < 0 || column >= grid[0].count {
+            return
+        }
+        
+        // Get the block color for cell coloring
+        let blockColor = block.color.color
+        
+        // Place the block in the grid - directly modify the grid
+        for (r, blockRow) in block.shape.enumerated() {
+            for (c, isSet) in blockRow.enumerated() {
+                if isSet {
+                    let gridRow = row + r
+                    let gridCol = column + c
+                    
+                    // Only set cells within bounds
+                    if gridRow >= 0 && gridRow < grid.count && gridCol >= 0 && gridCol < grid[0].count {
+                        grid[gridRow][gridCol] = true
+                        blockColorGrid[gridRow][gridCol] = blockColor
+                    }
+                }
+            }
+        }
+        
+        // Update game state
+        GameStateManager.shared.grid = self.grid
+        GameStateManager.shared.blockColorGrid = self.blockColorGrid
+        
+        // Remove the block from available blocks
+        availableBlocks.removeAll { $0.id == block.id }
+        GameStateManager.shared.availableBlocks.removeAll { $0.id == block.id }
+        
+        // Update score and streak
+        self.score += 10
+        self.currentStreak += 1
+        GameStateManager.shared.score = self.score
+        GameStateManager.shared.currentStreak = self.currentStreak
+        
+        // Reset UI state
+        self.isDragging = false
+        self.selectedBlock = nil
+        self.blockPosition = nil
+        
+        // Clear projection
+        GridProjectionCoordinator.shared.projectedCells = []
+        
+        // Add haptic feedback for placement
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        // Notify about block placement for doodle animations
+        NotificationCenter.default.post(
+            name: Notification.Name.blockPlaced,
+            object: nil,
+            userInfo: [
+                "position": CGPoint(x: column, y: row),
+                "blockType": block.symbol
+            ]
+        )
+        
+        // Check for completed rows
+        checkForCompletedRows()
+    }
+    
+    // Add a method to check for completed rows
+    private func checkForCompletedRows() {
+        var newGrid = self.grid
+        var newColorGrid = self.blockColorGrid
+        var row = self.grid.count - 1
+        
+        while row >= 0 {
+            if self.grid[row].allSatisfy({ $0 }) {
+                // Remove completed row
+                newGrid.remove(at: row)
+                newColorGrid.remove(at: row)
+                
+                // Add new empty row at top
+                newGrid.insert(Array(repeating: false, count: self.grid[0].count), at: 0)
+                newColorGrid.insert(Array(repeating: nil, count: self.grid[0].count), at: 0)
+                
+                // Add bonus score for completed row
+                score += 50
+            } else {
+                row -= 1
+            }
+        }
+        
+        if newGrid != self.grid {
+            withAnimation(.easeOut(duration: 0.2)) {
+                self.grid = newGrid
+                self.blockColorGrid = newColorGrid
+            }
+        }
+    }
+    
+    // Add a method to safely select a block without resetting the grid
+    private func selectBlock(_ block: Block?) {
+        // Store the previous state
+        let previousGrid = self.grid
+        let previousColorGrid = self.blockColorGrid
+        
+        // Update selected block
+        self.selectedBlock = block
+        
+        // Make sure grid state is maintained
+        if self.grid != previousGrid {
+            self.grid = previousGrid
+            self.blockColorGrid = previousColorGrid
+            
+            // Also update GameStateManager
+            GameStateManager.shared.grid = previousGrid
+        }
+    }
+    
+    // Add the setupGrid function to initialize the grid
+    private func setupGrid() {
+        // Initialize the grid with empty cells
+        grid = Array(repeating: Array(repeating: false, count: columns), count: rows)
+        blockColorGrid = Array(repeating: Array(repeating: nil, count: columns), count: rows)
+        
+        // Make sure GameStateManager has the same grid state
+        GameStateManager.shared.grid = grid
+        
+        print("📊 Grid initialized with \(rows) rows and \(columns) columns")
+    }
+    
+    // Add the generateBlocks function to create initial blocks
+    private func generateBlocks() {
+        // Clear any existing blocks first
+        availableBlocks.removeAll()
+        
+        // Generate a set of random blocks
+        for _ in 0..<4 {
+            availableBlocks.append(Block.createRandom())
+        }
+        
+        // Update the game state manager
+        GameStateManager.shared.availableBlocks = availableBlocks
+        
+        print("🧩 Generated \(availableBlocks.count) blocks")
+    }
+    
+    // Add the startGame function to begin gameplay
+    private func startGame() {
+        // Reset score and streak
+        score = 0
+        currentStreak = 0
+        
+        // Update GameStateManager
+        GameStateManager.shared.score = score
+        GameStateManager.shared.currentStreak = currentStreak
+        
+        // Set initial gesture mode
+        gestureMode = .blockDragging
+        GestureMode.current = .blockDragging
+        
+        // Reset any drag states
+        isDragging = false
+        selectedBlock = nil
+        blockPosition = nil
+        
+        print("🎮 Game started!")
     }
 }
 

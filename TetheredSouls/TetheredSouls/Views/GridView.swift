@@ -6,6 +6,9 @@ class GridProjectionCoordinator: ObservableObject {
     static let shared = GridProjectionCoordinator()
     @Published var projectedCells: [(row: Int, column: Int)] = []
     
+    // Add lastAdjustedPosition property
+    @Published var lastAdjustedPosition: CGPoint? = nil
+    
     // Add these properties to store grid geometry
     var gridFrame: CGRect = .zero
     var cellSize: CGFloat = 30
@@ -14,29 +17,70 @@ class GridProjectionCoordinator: ObservableObject {
     
     // Method to convert global coordinates to grid-relative
     func convertToGridPosition(globalPosition: CGPoint) -> CGPoint {
-        return CGPoint(
-            x: globalPosition.x - gridFrame.origin.x,
-            y: globalPosition.y - gridFrame.origin.y
-        )
+        // Get exact grid frame dimensions
+        let frameX = gridFrame.origin.x
+        let frameY = gridFrame.origin.y
+        let frameWidth = gridFrame.size.width
+        let frameHeight = gridFrame.size.height
+        
+        // Validate the grid frame
+        if frameWidth <= 0 || frameHeight <= 0 {
+            print("⛔️ ERROR: Invalid grid frame dimensions: \(gridFrame)")
+            // Return a safe fallback value
+            return globalPosition
+        }
+        
+        print("📐 Converting global position: \(globalPosition)")
+        print("📐 Grid frame: origin=(\(frameX), \(frameY)), size=(\(frameWidth), \(frameHeight))")
+        
+        // Calculate the relative position within the grid
+        let relativeX = globalPosition.x - frameX
+        let relativeY = globalPosition.y - frameY
+        
+        print("📐 Relative position within grid: (\(relativeX), \(relativeY))")
+        
+        // Return the position relative to the grid origin
+        return CGPoint(x: relativeX, y: relativeY)
     }
     
     // Method to calculate row and column from position
     func calculateGridCell(at position: CGPoint) -> (row: Int, column: Int)? {
-        let relativePosition = convertToGridPosition(globalPosition: position)
+        // Get the grid bounds
+        let frameX = gridFrame.origin.x
+        let frameY = gridFrame.origin.y
+        let frameWidth = gridFrame.size.width
+        let frameHeight = gridFrame.size.height
         
-        let row = Int(relativePosition.y / cellSize)
-        let column = Int(relativePosition.x / cellSize)
+        // Get the position relative to the grid's origin
+        let relativeX = position.x - frameX
+        let relativeY = position.y - frameY
         
-        // Check if within grid bounds
-        if row >= 0 && row < 10 && column >= 0 && column < 10 {
+        // If position is outside the grid frame, return nil
+        if relativeX < 0 || relativeX > frameWidth || relativeY < 0 || relativeY > frameHeight {
+            return nil
+        }
+        
+        // Calculate the column and row based on relative position
+        // Use simple division with the actual frame dimensions
+        let column = Int(floor(relativeX / (frameWidth / CGFloat(GridView.columns))))
+        let row = Int(floor(relativeY / (frameHeight / CGFloat(GridView.rows))))
+        
+        // Check if the calculated position is within grid bounds
+        if row >= 0 && row < GridView.rows && column >= 0 && column < GridView.columns {
             return (row, column)
         }
+        
         return nil
     }
 }
 
 struct GridView: View {
+    // Grid dimensions as static constants for reference
+    static let rows = 10
+    static let columns = 9
+    
     @Binding var grid: [[Bool]]
+    @Binding var blockColorGrid: [[Color?]]
     @Binding var selectedBlock: Block?
     @Binding var blockPosition: CGPoint?
     @Binding var isDragging: Bool
@@ -52,10 +96,13 @@ struct GridView: View {
         return max(calculatedSize, 30) // Ensure minimum size for touch targets
     }
     
-    func canPlaceBlock(at row: Int, column: Int) -> Bool {
-        guard let block = selectedBlock,
+    // Update to make this static so it can be called from ContentView
+    static func canPlaceBlock(at row: Int, column: Int) -> Bool {
+        guard let block = GameStateManager.shared.selectedBlock,
               GameStateManager.shared.availableBlocks.contains(where: { $0.id == block.id })
         else { return false }
+        
+        let grid = GameStateManager.shared.grid
         
         // Check if all cells required by the block can be placed
         for blockRow in 0..<block.shape.count {
@@ -78,6 +125,10 @@ struct GridView: View {
         }
         
         return true
+    }
+
+    func canPlaceBlock(at row: Int, column: Int) -> Bool {
+        return GridView.canPlaceBlock(at: row, column: column)
     }
     
     private func isDraggingOver(row: Int, column: Int) -> Bool {
@@ -109,7 +160,12 @@ struct GridView: View {
             }
         }
         
-        // After placing block, trigger animation - use withAnimation to make it smoother
+        // Remove the block from available blocks
+        if let index = GameStateManager.shared.availableBlocks.firstIndex(where: { $0.id == block.id }) {
+            GameStateManager.shared.availableBlocks.remove(at: index)
+        }
+        
+        // After placing block, trigger animation
         withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
             // Update the streak directly - this triggers the doodle animations
             GameStateManager.shared.currentStreak += 1
@@ -127,6 +183,11 @@ struct GridView: View {
                 ]
             )
         }
+        
+        // Reset the selection state
+        selectedBlock = nil
+        blockPosition = nil
+        isDragging = false
         
         // Check for completed rows
         checkForCompletedRows()
@@ -160,12 +221,16 @@ struct GridView: View {
         let isInProjection = projectionCoordinator.projectedCells.contains { $0.row == row && $0.column == column }
         let isValidPlacement = isInProjection && canPlaceBlock(at: row, column: column)
         
+        // Get the block color if this is a filled cell
+        let blockColor: Color? = isFilled ? blockColorGrid[row][column] ?? Theme.block1 : nil
+        
         return CellView(
             isOccupied: isFilled,
             row: row,
             column: column,
             selectedBlock: self.selectedBlock,
-            isPreview: self.isDragging && isInProjection
+            isPreview: self.isDragging && isInProjection,
+            blockColor: blockColor
         )
         .frame(width: self.cellSize, height: self.cellSize)
         .background(
@@ -275,6 +340,18 @@ struct GridView: View {
                                 cellSize: self.cellSize
                             )
                         )
+                        .onAppear {
+                            // Immediately update the coordinator with the frame on appear
+                            GridProjectionCoordinator.shared.gridFrame = geo.frame(in: .global)
+                            GridProjectionCoordinator.shared.cellSize = self.cellSize
+                            print("🔶 GRID FRAME INITIALIZED: \(geo.frame(in: .global))")
+                        }
+                        .onPreferenceChange(GridGeometryKey.self) { newGeometry in
+                            // Update the coordinator when the grid geometry changes
+                            GridProjectionCoordinator.shared.gridFrame = newGeometry.frame
+                            GridProjectionCoordinator.shared.cellSize = newGeometry.cellSize
+                            print("🔶 GRID FRAME UPDATED: \(newGeometry.frame)")
+                        }
                 }
             )
         }
@@ -366,6 +443,49 @@ struct GridView: View {
         // Access grid through GameStateManager since we can't access the instance property
         let grid = GameStateManager.shared.grid
         return row >= 0 && row < grid.count && column >= 0 && column < grid[0].count
+    }
+    
+    // Fix the static canPlaceBlockAt method to improve validation
+    static func canPlaceBlockAt(row: Int, column: Int, block: Block, grid: [[Bool]]) -> Bool {
+        // Safety check for nil block
+        if block.shape.isEmpty {
+            print("❌ Empty block shape")
+            return false
+        }
+        
+        // Check grid dimensions
+        if grid.isEmpty || grid[0].isEmpty {
+            print("❌ Grid is empty")
+            return false
+        }
+        
+        print("🧮 Validating placement at (\(row), \(column)) for block with shape \(block.shape.count)×\(block.shape[0].count)")
+        
+        // Check if all cells required by the block are within the grid and not occupied
+        for (r, blockRow) in block.shape.enumerated() {
+            for (c, isSet) in blockRow.enumerated() {
+                if isSet {
+                    let gridRow = row + r
+                    let gridCol = column + c
+                    
+                    // Check if the cell is within the grid bounds
+                    if gridRow < 0 || gridRow >= grid.count || gridCol < 0 || gridCol >= grid[0].count {
+                        print("❌ Out of bounds: (\(gridRow), \(gridCol))")
+                        return false
+                    }
+                    
+                    // Check if the cell is already occupied
+                    if grid[gridRow][gridCol] {
+                        print("❌ Cell occupied: (\(gridRow), \(gridCol))")
+                        return false
+                    }
+                }
+            }
+        }
+        
+        // All checks passed, placement is valid
+        print("✅ Valid placement at (\(row), \(column))")
+        return true
     }
 }
 
