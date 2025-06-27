@@ -360,7 +360,7 @@ struct BlockSelectionView: View {
         // Apply a direct, fixed vertical offset to fix the gap
         let fixedOffset = CGPoint(
             x: position.x,
-            y: position.y - 250 // Large fixed offset to move the projection up significantly
+            y: position.y - 80 // Reduced from 120 to 80 to further close the gap
         )
         
         #if DEBUG
